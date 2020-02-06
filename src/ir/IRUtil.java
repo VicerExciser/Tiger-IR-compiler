@@ -101,7 +101,13 @@ public class IRUtil {
         {
             IROperand operand = inst.operands[0];
             // The second operand must be an int type, and represents the size
-            int size = Integer.parseInt(inst.operands[1].toString());
+            int size;
+            try {
+            	size = Integer.parseInt(inst.operands[1].toString());
+			}
+            catch (java.lang.NumberFormatException nfe) {
+            	size = 1;
+			}
             if (operand instanceof IRVariableOperand || operand instanceof IRConstantOperand) 
             {
                 // I'm unsure which of these conditions accurately determine whether
