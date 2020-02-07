@@ -10,6 +10,8 @@ import ir.IRInstruction;
 import java.util.Comparator;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import java.util.HashSet;
 
 /*
 	Utility class to host helpful functions for classification and
@@ -31,33 +33,43 @@ public class IRUtil {
         }
     }
 
-	public static boolean isDefinition(IRInstruction inst) {
-		return  inst.opCode == IRInstruction.OpCode.ADD 
-            ||  inst.opCode == IRInstruction.OpCode.SUB 
-            ||  inst.opCode == IRInstruction.OpCode.MULT
-            ||  inst.opCode == IRInstruction.OpCode.DIV
-            ||  inst.opCode == IRInstruction.OpCode.AND
-            ||  inst.opCode == IRInstruction.OpCode.OR
-            ||  inst.opCode == IRInstruction.OpCode.CALLR
-            ||  inst.opCode == IRInstruction.OpCode.ASSIGN
-            ||  inst.opCode == IRInstruction.OpCode.ARRAY_LOAD;
-	}
-
-	public static boolean isDefinition(MinBasicBlock block) {
-		return isDefinition(block.s);
-	}
-
 	public static boolean isConditionalBranch(IRInstruction inst) {
-		return  inst.opCode == IRInstruction.OpCode.BREQ 
-            ||  inst.opCode == IRInstruction.OpCode.BRNEQ 
-            ||  inst.opCode == IRInstruction.OpCode.BRLT
-            ||  inst.opCode == IRInstruction.OpCode.BRGT
-            ||  inst.opCode == IRInstruction.OpCode.BRLEQ
-            ||  inst.opCode == IRInstruction.OpCode.BRGEQ;
+		return  inst.opCode == IRInstruction.OpCode.BREQ
+				||  inst.opCode == IRInstruction.OpCode.BRNEQ
+				||  inst.opCode == IRInstruction.OpCode.BRLT
+				||  inst.opCode == IRInstruction.OpCode.BRGT
+				||  inst.opCode == IRInstruction.OpCode.BRLEQ
+				||  inst.opCode == IRInstruction.OpCode.BRGEQ;
 	}
 
 	public static boolean isConditionalBranch(MinBasicBlock block) {
 		return isConditionalBranch(block.s);
+	}
+
+	public static boolean isBinaryOp(IRInstruction inst) {
+		return  inst.opCode == IRInstruction.OpCode.ADD
+			||  inst.opCode == IRInstruction.OpCode.SUB
+			||  inst.opCode == IRInstruction.OpCode.MULT
+			||  inst.opCode == IRInstruction.OpCode.DIV
+			||  inst.opCode == IRInstruction.OpCode.AND
+			||  inst.opCode == IRInstruction.OpCode.OR;
+	}
+
+	public static boolean isBinaryOp(MinBasicBlock block) {
+		return isBinaryOp(block.s);
+	}
+
+	// NOTE: Array assignments do not generate definitions
+	public static boolean isDefinition(IRInstruction inst) {
+		return  isBinaryOp(inst)
+            ||  inst.opCode == IRInstruction.OpCode.CALLR
+            ||  inst.opCode == IRInstruction.OpCode.ARRAY_LOAD
+			|| (inst.opCode == IRInstruction.OpCode.ASSIGN
+			&& !isArrayAssignment(inst));
+	}
+
+	public static boolean isDefinition(MinBasicBlock block) {
+		return isDefinition(block.s);
 	}
 
 	static List<IRInstruction.OpCode> criticalOps = Arrays.asList(
@@ -96,9 +108,10 @@ public class IRUtil {
 	}
 
 	public static boolean isArrayAssignment(IRInstruction inst) {
+		if (inst.opCode != IRInstruction.OpCode.ASSIGN) return false;
         // The first operand must be an array for an array assignment
-        if (inst != null && inst.operands != null && inst.operands.length > 0) 
-        {
+        if (inst != null && inst.opCode == IRInstruction.OpCode.ASSIGN
+				&& inst.operands != null && inst.operands.length > 0) {
             IROperand operand = inst.operands[0];
             // The second operand must be an int type, and represents the size
             int size;
@@ -108,18 +121,19 @@ public class IRUtil {
             catch (java.lang.NumberFormatException nfe) {
             	size = 1;
 			}
-            if (operand instanceof IRVariableOperand || operand instanceof IRConstantOperand) 
+            if (operand instanceof IRVariableOperand)  // || operand instanceof IRConstantOperand)
             {
                 // I'm unsure which of these conditions accurately determine whether
                 // the operand is an Array or not...
-                boolean isArray1 = ((IRVariableOperand)operand).type instanceof IRArrayType;
-                boolean isArray2 = ((IRVariableOperand)operand).type == IRArrayType.get(IRIntType.get(), size);
-                				// || ((IRConstantOperand)operand).type == IRArrayType.get(IRIntType.get(), 1);
-                boolean isArray3 = ((IRVariableOperand)operand).type == IRArrayType.get(IRFloatType.get(), size);
-                				// || ((IRConstantOperand)operand).type == IRArrayType.get(IRFloatType.get(), 1);
-
-                // ...so I'm just gonna check all of them (for now).
-                return isArray1 || isArray2 || isArray3;
+//                boolean isArray1 = ((IRVariableOperand)operand).type instanceof IRArrayType;
+//                boolean isArray2 = ((IRVariableOperand)operand).type == IRArrayType.get(IRIntType.get(), size);
+//                				// || ((IRConstantOperand)operand).type == IRArrayType.get(IRIntType.get(), 1);
+//                boolean isArray3 = ((IRVariableOperand)operand).type == IRArrayType.get(IRFloatType.get(), size);
+//                				// || ((IRConstantOperand)operand).type == IRArrayType.get(IRFloatType.get(), 1);
+//
+//                // ...so I'm just gonna check all of them (for now).
+//                return isArray1 || isArray2 || isArray3;
+				return ((IRVariableOperand)operand).type instanceof IRArrayType;
             }
         }
         return false;
@@ -150,12 +164,13 @@ public class IRUtil {
 			// and bump i to skip over its index
 			else if ((i < f.instructions.size()-1) 		// Bounds check to make sure [i+1] is in range
 					&& (f.instructions.get(i).opCode == IRInstruction.OpCode.LABEL
-					||	f.instructions.get(i).opCode == IRInstruction.OpCode.BREQ
-        			||  f.instructions.get(i).opCode == IRInstruction.OpCode.BRNEQ
-        			||  f.instructions.get(i).opCode == IRInstruction.OpCode.BRLT 
-        			||  f.instructions.get(i).opCode == IRInstruction.OpCode.BRGT 
-        			||  f.instructions.get(i).opCode == IRInstruction.OpCode.BRLEQ
-        			||  f.instructions.get(i).opCode == IRInstruction.OpCode.BRGEQ))
+					|| isConditionalBranch(f.instructions.get(i))))
+//					||	f.instructions.get(i).opCode == IRInstruction.OpCode.BREQ
+//        			||  f.instructions.get(i).opCode == IRInstruction.OpCode.BRNEQ
+//        			||  f.instructions.get(i).opCode == IRInstruction.OpCode.BRLT
+//        			||  f.instructions.get(i).opCode == IRInstruction.OpCode.BRGT
+//        			||  f.instructions.get(i).opCode == IRInstruction.OpCode.BRLEQ
+//        			||  f.instructions.get(i).opCode == IRInstruction.OpCode.BRGEQ))
 				f.instructions.get(++i).isLeader = true;
 			else
 				f.instructions.get(i).isLeader = false;
@@ -194,6 +209,8 @@ public class IRUtil {
     	return null;
     }
 
+    // Given a label for a Branch or Goto operation to jump to, return the target
+	// instruction associated with that label
     public static IRInstruction getLabelTarget(IRFunction f, IRLabelOperand label) {
     	for (IRInstruction i : f.instructions) {
     		if (i.opCode == IRInstruction.OpCode.LABEL) {
@@ -204,6 +221,81 @@ public class IRUtil {
     	return null;
     }
 
+    public static Set<IRVariableOperand> getSourceOperands(IRInstruction inst) {
+		Set<IRVariableOperand> sources = new HashSet<>(2);
+		int len = inst.operands.length;
+		int i;
+
+		if (isDefinition(inst)) {
+			if (isBinaryOp(inst)) {    // op, x, y, z
+				for (i = 1; i < len; i++)
+					if (inst.operands[i] instanceof IRVariableOperand)
+						sources.add((IRVariableOperand)inst.operands[i]);
+			} else if (inst.opCode == IRInstruction.OpCode.CALLR) {    // op, x, func_name, param1, param2, ..., paramN
+				for (i = 2; i < len; i++)
+					if (inst.operands[i] instanceof IRVariableOperand)
+						sources.add((IRVariableOperand)inst.operands[i]);
+			} else if (inst.opCode == IRInstruction.OpCode.ASSIGN) {    // op, x, y
+				// (array assignments not considered as they do not generate definitions)
+				if (inst.operands[1] instanceof IRVariableOperand)
+					sources.add((IRVariableOperand)inst.operands[1]);
+			}
+		} else if (isArrayAssignment(inst)) {    // op, x, size, value
+			if (inst.operands[len-1] instanceof IRVariableOperand)
+				sources.add((IRVariableOperand)inst.operands[len-1]);
+		} else if (inst.opCode == IRInstruction.OpCode.ARRAY_STORE) {    // op, x, array_name, offset
+			if (inst.operands[0] instanceof IRVariableOperand)
+				sources.add((IRVariableOperand)inst.operands[0]);
+		} else if (isConditionalBranch(inst)) {    // op, label, y, z
+			for (i = 1; i < len; i++)
+				if (inst.operands[i] instanceof IRVariableOperand)
+					sources.add((IRVariableOperand)inst.operands[i]);
+		} else if (inst.opCode == IRInstruction.OpCode.RETURN) {    // op, x
+			if (inst.operands[0] instanceof IRVariableOperand)
+				sources.add((IRVariableOperand)inst.operands[0]);
+		} else if (inst.opCode == IRInstruction.OpCode.CALL) {    // op, func_name, param1, param2, ..., paramN
+			for (i = 1; i < len; i++)
+				if (inst.operands[i] instanceof IRVariableOperand)
+					sources.add((IRVariableOperand)inst.operands[i]);
+		}
+		return sources;
+	}
+
+	public static Set<String> getAllUnusedVariables(IRFunction function) {
+		// Print all variables that are declared but not used (including unused parameters)
+		// System.out.println("Unused variables/parameters:");
+
+		// IROperand objects are not shared between instructions/parameter list/variable list
+		// They should be compared using their names
+		Set<String> vars = new HashSet<>();
+
+		// Parameters are not included in the variable list
+		for (IRVariableOperand v : function.parameters)
+			vars.add(v.getName());
+
+		for (IRVariableOperand v : function.variables)
+			vars.add(v.getName());
+
+		for (IRInstruction instruction : function.instructions)
+			for (IROperand operand : instruction.operands)
+				if (operand instanceof IRVariableOperand) {
+					IRVariableOperand variableOperand = (IRVariableOperand) operand;
+					vars.remove(variableOperand.getName());
+				}
+
+		// if (!vars.isEmpty())
+		// 	System.out.println(function.name + ": " + String.join(", ", vars));
+		return vars;
+
+	}
+
+	public static Set<String> getAllUnusedVariables(IRProgram program) {
+		Set<String> vars = new HashSet<>();
+		for (IRFunction function : program.functions) {
+			vars.addAll(getAllUnusedVariables(function));
+		}
+		return vars;
+	}
 }
 
 

@@ -30,4 +30,21 @@ public abstract class IROperand {
         return value;
     }
 
+    @Override
+    public boolean equals(Object obj) {
+        return obj != null
+            && obj instanceof IROperand
+            && (this == obj
+            || (((IROperand)obj).value.equals(this.value)
+            && ((IROperand)obj).getParent().irLineNumber == (getParent().irLineNumber)));
+    }
+
+    @Override
+    public int hashCode() {
+        int result = 17;
+        result = 31 * result + getParent().irLineNumber;
+        result = 31 * result + this.value.toLowerCase().hashCode();
+        return result;
+    }
+
 }

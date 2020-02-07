@@ -1,6 +1,8 @@
 package ir.cfg;
 
 import ir.*;
+import ir.operand.IRVariableOperand;
+
 import java.util.List;
 import java.util.Set;
 import java.util.LinkedHashSet;
@@ -55,11 +57,54 @@ public class MaxBasicBlock extends BasicBlockBase {
 		return true;
 	}
 
+	// Populates this block's GEN set, as well as the mappings for
+	// each defined or used variable to its defining or using instruction, respectively
+	public void findAllDefsAndUses() {
+		for (IRInstruction inst : this.instructions) {
+			int i;
+			IRVariableOperand instDef = null;
+
+			if (IRUtil.isDefinition(inst)) {
+				this.gen.add(inst);
+				// First operand is the LHS target for all definition instructions
+				instDef = (IRVariableOperand) inst.operands[0];
+			}
+
+			if (instDef != null) {
+				String key = instDef.getName();
+				if (!this.operandDefs.containsKey(key))
+					this.operandDefs.put(key, new LinkedHashSet<IRInstruction>());
+				this.operandDefs.get(key).add(inst);
+			}
+
+			for (IRVariableOperand use : IRUtil.getSourceOperands(inst)) {
+				String key = use.getName();
+				if (!this.operandUses.containsKey(key))
+					this.operandUses.put(key, new LinkedHashSet<IRInstruction>());
+				this.operandUses.get(key).add(inst);
+			}
+		}
+	}
+
+//	public void computeGenSet() {
+//		for (IRInstruction op : this.instructions) {
+//			if (IRUtil.isDefinition(op)) {
+//				this.gen.add(op);
+//			}
+//		}
+//	}
+//
+//	public void computeKillSet(Set<IRInstruction> universalDefSet) {
+//
+//	}
+
 	// Populate this block's GEN and KILL local definition sets
-	public void computeLocalDefSets() {
+//	public void computeLocalDefSets() {
 		// GEN[S] = set of definitions in S ("generated" by S)
 
 		//// TODO ////
+
+//		for (BasicBlockBase bb : )
 
 
 		// KILL[S] = set of definitions that may be overwritten by S 
@@ -68,10 +113,10 @@ public class MaxBasicBlock extends BasicBlockBase {
 
 		//// TODO ////
 
-	}
+//	}
 
 	// Populate this block's IN and OUT global definition sets using CFG
-	public void computeGlobalDefSets(ControlFlowGraph cfg) {
+//	public void computeGlobalDefSets(ControlFlowGraph cfg) {
 		// IN[S] = set of definitions that reach the entry point of S
 
 		
@@ -83,7 +128,7 @@ public class MaxBasicBlock extends BasicBlockBase {
 
 		//// TODO ////
 
-	}
+//	}
 
 	
 }
@@ -92,7 +137,7 @@ public class MaxBasicBlock extends BasicBlockBase {
 /*
 	Data flow equations (invariants) for the definition sets:
 
-		OUT[S] = GEN[S] U (IN[S] - KILL[S])
+		OUT[S] = GEN[S] ∪ (IN[S] - KILL[S])
 		 IN[S] = Union of OUT[p] sets for all p in predecessors
 
 

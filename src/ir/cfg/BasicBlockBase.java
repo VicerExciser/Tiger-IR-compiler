@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.HashMap;
 // import java.util.Comparator;
 
 /*
@@ -20,11 +22,19 @@ public abstract class BasicBlockBase implements Comparable<BasicBlockBase> {
 	public IRInstruction terminator;
 	public int size;
 
-	public Set<IRInstruction> gen;
+	public Set<IRInstruction> gen;		// defs
 	public Set<IRInstruction> kill;
 	public Set<IRInstruction> in;
 	public Set<IRInstruction> out;
 
+	// Maps to associate each variable instructio operand with a set of all
+	// instructions in the block that define or use that operand, respectively
+//	public Map<IRVariableOperand, Set<IRInstructnion>> operandDefs;
+//	public Map<IRVariableOperand, Set<IRInstruction>> operandUses;
+	public Map<String, Set<IRInstruction>> operandDefs;
+	public Map<String, Set<IRInstruction>> operandUses;
+
+	// The following sets are populated when the CFG is constructed
 	public Set<BasicBlockBase> predecessors;
 	public Set<BasicBlockBase> successors;
 
@@ -43,6 +53,9 @@ public abstract class BasicBlockBase implements Comparable<BasicBlockBase> {
 		this.kill = new HashSet<>();
 		this.in = new HashSet<>();
 		this.out = new HashSet<>();
+
+		this.operandDefs = new HashMap<>();
+		this.operandUses = new HashMap<>();
 
 		this.predecessors = new LinkedHashSet<>();
 		this.successors = new LinkedHashSet<>();
@@ -87,10 +100,11 @@ public abstract class BasicBlockBase implements Comparable<BasicBlockBase> {
 				&& this.hashCode() == bbb.hashCode();
 	}
 
+	/*
 	// Abstract functions for derived classes to implement
 	// for generating the local definition sets GEN and KILL
 	public abstract void computeLocalDefSets();
 	// and the global defintion sets IN and OUT using CFG
 	public abstract void computeGlobalDefSets(ControlFlowGraph cfg);
-	
+	*/
 }
