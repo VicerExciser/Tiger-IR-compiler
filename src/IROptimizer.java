@@ -86,6 +86,7 @@ public class IROptimizer {
 
                 // For each instruction j that contains a def of y or z and reaches i, mark and add to worklist
                 for (IRInstruction j : cfg.getUniversalDefinitions()) {
+                    boolean isReachingDefinition = false;
                     for (IRVariableOperand src : IRUtil.getSourceOperands(i)) {
                         // Def'd variable is always the first operand for definitions
                         if (((IRVariableOperand) j.operands[0]).getName().equals(src.getName())) {
@@ -94,7 +95,7 @@ public class IROptimizer {
                             //	1) if it in the IN set for the basic block B(i) containing i, and
                             //	2) the def is not killed locally within B(i) before instruction i
                             BasicBlockBase iBlock = i.belongsToBlock;
-                            boolean isReachingDefinition = false;
+                            
 
                             if (iBlock.in.contains(j)) {
                                 if (iBlock.leader.equals(i))
@@ -118,11 +119,13 @@ public class IROptimizer {
                                     isReachingDefinition = true;
                             }
 
-                            if (isReachingDefinition) {
-                                marked.add(j);
-                                worklist.add(j);
-                            }
+                            
                         }
+                    }
+                    
+                    if (isReachingDefinition) {
+                        marked.add(j);
+                        worklist.add(j);
                     }
                 }
             }
