@@ -86,6 +86,7 @@ public class IROptimizer {
 
                 // For each instruction j that contains a def of y or z and reaches i, mark and add to worklist
                 for (IRInstruction j : cfg.getUniversalDefinitions()) {
+                    //System.out.println("Instruction that is being done is " + String.valueOf(j.irLineNumber));
                     boolean isReachingDefinition = false;
                     for (IRVariableOperand src : IRUtil.getSourceOperands(i)) {
                         // Def'd variable is always the first operand for definitions
@@ -98,12 +99,15 @@ public class IROptimizer {
                             
 
                             if (iBlock.in.contains(j)) {
-                                if (iBlock.leader.equals(i))
+                                if (iBlock.leader.equals(i)) {
+                                    System.out.println("Line number: " + String.valueOf(j.irLineNumber) + " is reaching in the first if.");
                                     isReachingDefinition = true;
+                                }
                                 else if (ControlFlowGraph.USE_MAXIMAL_BLOCKS) {
                                     // Inspect preceeding ops in the block for def killing
                                     for (IRInstruction op : ((MaxBasicBlock) iBlock).instructions) {
                                         if (op.equals(i)) {
+                                            System.out.println("Line number: " + String.valueOf(j.irLineNumber) + " is reaching in the second if.");
                                             isReachingDefinition = true;
                                             break;
                                         }
@@ -114,9 +118,12 @@ public class IROptimizer {
                                         }
 
                                     }
+                                    
                                 }
-                                else	// Can skip condition 2 if analyzing instruction-level CFG
+                                else {	// Can skip condition 2 if analyzing instruction-level CFG
+                                    System.out.println("Line number: " + String.valueOf(j.irLineNumber) + " is reaching in the last else.");
                                     isReachingDefinition = true;
+                                }
                             }
 
                             
