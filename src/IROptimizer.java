@@ -5,6 +5,7 @@ import ir.operand.*;
 import ir.IRInstruction.OpCode.*;
 
 import java.io.PrintStream;
+import java.nio.channels.IllegalBlockingModeException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.PriorityQueue;
@@ -60,7 +61,34 @@ public class IROptimizer {
             ControlFlowGraph cfg = new ControlFlowGraph(function);
             cfg.build();
             allCFGs.add(cfg);
-
+            
+            /**
+            // Prints out Basic Block Structure
+            for(BasicBlockBase basicBlockBase : cfg.getBlocks()) {
+                System.out.println("bb id: " + basicBlockBase.id.toString());
+                for(IRInstruction booty : basicBlockBase.gen) {
+                    System.out.println("gen inst : " + String.valueOf(booty.irLineNumber));
+                }
+                System.out.println();
+                for(IRInstruction yeeeep : basicBlockBase.kill) {
+                    System.out.println("kill inst : " + String.valueOf(yeeeep.irLineNumber));
+                }
+                System.out.println();
+                for(IRInstruction yeahsowhat : basicBlockBase.in) {
+                    System.out.println("in inst : " + String.valueOf(yeahsowhat.irLineNumber));
+                }
+                System.out.println();
+                for(IRInstruction imlosingit : basicBlockBase.out) {
+                    System.out.println("out inst : " + String.valueOf(imlosingit.irLineNumber));
+                }
+                System.out.println();
+                System.out.println();
+            }**/
+            
+            
+            
+            
+            
             for (IRInstruction instruction : function.instructions) {
                 // Mark all critical instructions and add to the worklist
                 if (IRUtil.isCritical(instruction)) {
@@ -74,7 +102,7 @@ public class IROptimizer {
 
             while (!worklist.isEmpty()) {
                 IRInstruction i = worklist.poll();
-
+                
                 // could begin at entryNode, walk predecessors until reaching target block
                 // all using and defining instructions for each block is recorded in a Set
                 // (value of operandDefs or operandUses HashMap)
@@ -85,8 +113,7 @@ public class IROptimizer {
 	            			*/
 
                 // For each instruction j that contains a def of y or z and reaches i, mark and add to worklist
-                for (IRInstruction j : cfg.getUniversalDefinitions()) {
-                    //System.out.println("Instruction that is being done is " + String.valueOf(j.irLineNumber));
+                for (IRInstruction j : cfg.getUniversalDefinitions()) { //For j in gen(basic block)
                     boolean isReachingDefinition = false;
                     for (IRVariableOperand src : IRUtil.getSourceOperands(i)) {
                         // Def'd variable is always the first operand for definitions
@@ -97,17 +124,18 @@ public class IROptimizer {
                             //	2) the def is not killed locally within B(i) before instruction i
                             BasicBlockBase iBlock = i.belongsToBlock;
                             
-
                             if (iBlock.in.contains(j)) {
+                                System.out.println("j: " + j.toString());
                                 if (iBlock.leader.equals(i)) {
-                                    System.out.println("Line number: " + String.valueOf(j.irLineNumber) + " is reaching in the first if.");
                                     isReachingDefinition = true;
+                                }
+                                else if(iBlock.out.contains(j)) {
+                                    isReachingDefinition = true; // condition two from lecture 4, slide 4. If it is in the out set of the block, then it was not killed within the block
                                 }
                                 else if (ControlFlowGraph.USE_MAXIMAL_BLOCKS) {
                                     // Inspect preceeding ops in the block for def killing
                                     for (IRInstruction op : ((MaxBasicBlock) iBlock).instructions) {
                                         if (op.equals(i)) {
-                                            System.out.println("Line number: " + String.valueOf(j.irLineNumber) + " is reaching in the second if.");
                                             isReachingDefinition = true;
                                             break;
                                         }
@@ -121,7 +149,6 @@ public class IROptimizer {
                                     
                                 }
                                 else {	// Can skip condition 2 if analyzing instruction-level CFG
-                                    System.out.println("Line number: " + String.valueOf(j.irLineNumber) + " is reaching in the last else.");
                                     isReachingDefinition = true;
                                 }
                             }
@@ -192,6 +219,13 @@ within B(i) before instruction i
         IRPrinter filePrinter = new IRPrinter(new PrintStream(args[1]));
         filePrinter.printProgram(program);
 
+    }
+    
+    
+    public void CFGlecture3() {
+        // yeah youre going to want to just move the code up to main, i"m just developiong here for cleanliness
+        
+        
     }
 
 
