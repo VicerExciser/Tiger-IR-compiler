@@ -125,7 +125,9 @@ public class IROptimizer {
                             BasicBlockBase iBlock = i.belongsToBlock;
                             
                             if (iBlock.in.contains(j)) {
-                                System.out.println("j: " + j.toString());
+                                System.out.println("block id: " + iBlock.id);
+                                System.out.println("j: " + String.valueOf(j.irLineNumber));
+                                System.out.println("i: " + String.valueOf(i.irLineNumber) + "\n");
                                 if (iBlock.leader.equals(i)) {
                                     isReachingDefinition = true;
                                 }
