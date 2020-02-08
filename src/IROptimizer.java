@@ -10,6 +10,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.PriorityQueue;
 import java.util.Set;
+
+
 import java.util.HashSet;
 
 public class IROptimizer {
@@ -94,6 +96,8 @@ public class IROptimizer {
                 if (IRUtil.isCritical(instruction)) {
                     marked.add(instruction);
                     worklist.add(instruction);
+                    System.out.println("Line number: " + String.valueOf(instruction.irLineNumber) + " is critical.");
+                    // It is finding correct critical instructions
                 }
             }
 
@@ -103,6 +107,9 @@ public class IROptimizer {
             while (!worklist.isEmpty()) {
                 IRInstruction i = worklist.poll();
                 
+                smallBlocks(function, i, worklist, marked);
+                
+                /**
                 // could begin at entryNode, walk predecessors until reaching target block
                 // all using and defining instructions for each block is recorded in a Set
                 // (value of operandDefs or operandUses HashMap)
@@ -110,30 +117,33 @@ public class IROptimizer {
 	            			/*
 								For each block on path (all successors?), check
 								block.operandDefs.get(src.getName())
-	            			*/
+	            			
 
                 // For each instruction j that contains a def of y or z and reaches i, mark and add to worklist
                 for (IRInstruction j : cfg.getUniversalDefinitions()) { //For j in gen(basic block)
                     boolean isReachingDefinition = false;
                     for (IRVariableOperand src : IRUtil.getSourceOperands(i)) {
                         // Def'd variable is always the first operand for definitions
+                        System.out.println("i: " + String.valueOf(i.irLineNumber) + " j: " + String.valueOf(j.irLineNumber));
+                        //System.out.println("j operands: " + ((IRVariableOperand)j.operands[0]).getName() +
+                                (j.operands[1]).toString() + ""
+                                + " src: " + src.getName());
+                        
                         if (((IRVariableOperand) j.operands[0]).getName().equals(src.getName())) {
                             // Check if this definition of src reaches instruction i now:
                             // A def reaches instruction i
                             //	1) if it in the IN set for the basic block B(i) containing i, and
                             //	2) the def is not killed locally within B(i) before instruction i
                             BasicBlockBase iBlock = i.belongsToBlock;
-                            
+
+
                             if (iBlock.in.contains(j)) {
-                                System.out.println("block id: " + iBlock.id);
-                                System.out.println("j: " + String.valueOf(j.irLineNumber));
-                                System.out.println("i: " + String.valueOf(i.irLineNumber) + "\n");
                                 if (iBlock.leader.equals(i)) {
                                     isReachingDefinition = true;
                                 }
-                                else if(iBlock.out.contains(j)) {
-                                    isReachingDefinition = true; // condition two from lecture 4, slide 4. If it is in the out set of the block, then it was not killed within the block
-                                }
+                                //else if(iBlock.out.contains(j)) {
+                                 //   isReachingDefinition = true; // condition two from lecture 4, slide 4. If it is in the out set of the block, then it was not killed within the block
+                                //}
                                 else if (ControlFlowGraph.USE_MAXIMAL_BLOCKS) {
                                     // Inspect preceeding ops in the block for def killing
                                     for (IRInstruction op : ((MaxBasicBlock) iBlock).instructions) {
@@ -154,6 +164,11 @@ public class IROptimizer {
                                     isReachingDefinition = true;
                                 }
                             }
+                            //If not in the in{}set, then check same block
+                            else if (iBlock.out.contains(j)){
+                                isReachingDefinition = true;
+                            }
+                            
 
                             
                         }
@@ -164,6 +179,7 @@ public class IROptimizer {
                         worklist.add(j);
                     }
                 }
+                **/
             }
 /*
             IRInstruction curOp;
@@ -223,11 +239,37 @@ within B(i) before instruction i
 
     }
     
-    
-    public void CFGlecture3() {
-        // yeah youre going to want to just move the code up to main, i"m just developiong here for cleanliness
+    // @param i critical instruction pulled off worklist
+    // @param f the current function holding the instruction i and the CFG
+    // @param worklst the worklist
+    // @param mark the marked set
+    public static void smallBlocks(IRFunction f, IRInstruction i, PriorityQueue<IRInstruction> worklst, Set<IRInstruction> mark) {
+        // TODO: call smallBlocks from main
+
+        IROperand x = i.operands[0];
+        IROperand y = i.operands.length > 1 ? i.operands[1] : null;
+        IROperand z = i.operands.length > 2 ? i.operands[2] : null;
         
-        
+        for(IRInstruction j : f.instructions) { // for instruction j in the function,
+            if(IRUtil.isDefinition(j)) { // that is a def,
+                IROperand jx = j.operands[0];
+                if(y != null && z != null) {
+                    System.out.println("i: " + String.valueOf(i.irLineNumber) + " " + x.toString() + " " + 
+                            y.toString() + " " + z.toString() + ". j: " + String.valueOf(j.irLineNumber) + " " + jx.toString());
+                }else if(y != null) {
+                    System.out.println("i: " + String.valueOf(i.irLineNumber) + " " + x.toString() + " " + 
+                            y.toString() + ". j: " + String.valueOf(j.irLineNumber) + " " + jx.toString());
+                }else {
+                    System.out.println("i: " + String.valueOf(i.irLineNumber) + " " + x.toString() + ". j: " + String.valueOf(j.irLineNumber) + " " + jx.toString());
+                }
+                if(jx.equals(y) || jx.equals(z)) { // that writes to y or z,
+                    // need to check if it reaches instead of blindly adding to worklist
+                    mark.add(j);
+                    worklst.add(j);
+                }
+            }
+        }
+        System.out.println();
     }
 
 
