@@ -251,6 +251,9 @@ within B(i) before instruction i
         IROperand z = i.operands.length > 2 ? i.operands[2] : null;
         
         for(IRInstruction j : f.instructions) { // for instruction j in the function,
+            if(j.equals(i)) {
+                break;
+            }
             if(IRUtil.isDefinition(j)) { // that is a def,
                 IROperand jx = j.operands[0];
                
