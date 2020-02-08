@@ -252,7 +252,7 @@ within B(i) before instruction i
             if(IRUtil.isDefinition(j)) { // that is a def,
                 IROperand jx = j.operands[0];
                
-                /*
+                
                 if(y != null && z != null) {
                     System.out.println("i: " + String.valueOf(i.irLineNumber) + " \"" + x.toString() + " " + 
                             y.toString() + " " + z.toString() + "\". j: " + String.valueOf(j.irLineNumber) + " \"" + jx.toString()
@@ -264,15 +264,15 @@ within B(i) before instruction i
                     System.out.println("i: " + String.valueOf(i.irLineNumber) + " \"" + x.toString() + "\". j: " + 
                 String.valueOf(j.irLineNumber) + " \"" + jx.toString() + "\"");
                 }
-                */
+                
                 
                 if(y != null) {
                     if(jx.toString().equals(y.toString())){
                         mark.add(j);
                         worklst.add(j);
                         
-                       /*  System.out.println("j: " +  String.valueOf(j.irLineNumber) + " has been marked. It has jx of \"" + 
-                                jx.toString() + "\" and y of \"" + y.toString() + "\""); */
+                         System.out.println("j: " +  String.valueOf(j.irLineNumber) + " has been marked. It has jx of \"" + 
+                                jx.toString() + "\" and y of \"" + y.toString() + "\""); 
                     }
                 }
                 if(z != null) {
@@ -280,14 +280,24 @@ within B(i) before instruction i
                         mark.add(j);
                         worklst.add(j);
                         
-                        /* System.out.println("j: " +  String.valueOf(j.irLineNumber) + " has been marked. It has jx of \"" + 
-                                jx.toString() + "\" and z of \"" + z.toString() + "\""); */
+                         System.out.println("j: " +  String.valueOf(j.irLineNumber) + " has been marked. It has jx of \"" + 
+                                jx.toString() + "\" and z of \"" + z.toString() + "\""); 
+                    }
+                }
+                if(IRUtil.isXUse(i)) {
+                    // if I's "x" slot holds a use of a variable. Really only array assignments and returns
+                    if(jx.toString().equals(x.toString())){
+                        mark.add(j);
+                        worklst.add(j);
+                        
+                         System.out.println("j: " +  String.valueOf(j.irLineNumber) + " has been marked. It has jx of \"" + 
+                                jx.toString() + "\" and x of \"" + x.toString() + "\""); 
                     }
                 }
                
             }
         }
-        //System.out.println();
+        System.out.println();
     }
 
 

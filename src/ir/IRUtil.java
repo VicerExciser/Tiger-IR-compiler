@@ -102,6 +102,17 @@ public class IRUtil {
 	        	? isArrayAssignment(inst)
 	        	: criticalOps.contains(inst.opCode);
 	}
+	
+	public static boolean isXUse(IRInstruction inst) {
+	    if(inst.opCode == IRInstruction.OpCode.RETURN) {
+	        return true;
+	    }
+	    if(isArrayAssignment(inst)) {
+	        return true;
+	    }
+	    
+	    return false;
+	}
 
 	public static boolean isCritical(MinBasicBlock block) {
 		return isCritical(block.s);
