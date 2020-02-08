@@ -96,7 +96,7 @@ public class IROptimizer {
                 if (IRUtil.isCritical(instruction)) {
                     marked.add(instruction);
                     worklist.add(instruction);
-                    System.out.println("Line number: " + String.valueOf(instruction.irLineNumber) + " is critical.");
+                    //System.out.println("Line number: " + String.valueOf(instruction.irLineNumber) + " is critical.");
                     // It is finding correct critical instructions
                 }
             }
@@ -122,12 +122,12 @@ public class IROptimizer {
                 // For each instruction j that contains a def of y or z and reaches i, mark and add to worklist
                 for (IRInstruction j : cfg.getUniversalDefinitions()) { //For j in gen(basic block)
                     boolean isReachingDefinition = false;
+
                     for (IRVariableOperand src : IRUtil.getSourceOperands(i)) {
                         // Def'd variable is always the first operand for definitions
                         System.out.println("i: " + String.valueOf(i.irLineNumber) + " j: " + String.valueOf(j.irLineNumber));
                         //System.out.println("j operands: " + ((IRVariableOperand)j.operands[0]).getName() +
-                                (j.operands[1]).toString() + ""
-                                + " src: " + src.getName());
+                               // (j.operands[1]).toString() + "" + " src: " + src.getName());
                         
                         if (((IRVariableOperand) j.operands[0]).getName().equals(src.getName())) {
                             // Check if this definition of src reaches instruction i now:
@@ -152,7 +152,7 @@ public class IROptimizer {
                                             break;
                                         }
                                         else if (IRUtil.isDefinition(op)
-                                                && ((IRVariableOperand) op.operands[0]).getName().equals(src.getName())) {
+                                                && ((IRVariableOperand) op.operands[0]).toString().equals(src.toString())) {
                                             isReachingDefinition = false;
                                             break;
                                         }
@@ -164,11 +164,6 @@ public class IROptimizer {
                                     isReachingDefinition = true;
                                 }
                             }
-                            //If not in the in{}set, then check same block
-                            else if (iBlock.out.contains(j)){
-                                isReachingDefinition = true;
-                            }
-                            
 
                             
                         }
@@ -178,8 +173,8 @@ public class IROptimizer {
                         marked.add(j);
                         worklist.add(j);
                     }
-                }
-                **/
+                } **/
+                
             }
 /*
             IRInstruction curOp;
@@ -257,6 +252,7 @@ within B(i) before instruction i
             if(IRUtil.isDefinition(j)) { // that is a def,
                 IROperand jx = j.operands[0];
                
+                /*
                 if(y != null && z != null) {
                     System.out.println("i: " + String.valueOf(i.irLineNumber) + " \"" + x.toString() + " " + 
                             y.toString() + " " + z.toString() + "\". j: " + String.valueOf(j.irLineNumber) + " \"" + jx.toString()
@@ -268,6 +264,7 @@ within B(i) before instruction i
                     System.out.println("i: " + String.valueOf(i.irLineNumber) + " \"" + x.toString() + "\". j: " + 
                 String.valueOf(j.irLineNumber) + " \"" + jx.toString() + "\"");
                 }
+                */
                 
                 if(y != null) {
                     if(jx.toString().equals(y.toString())){
@@ -290,7 +287,7 @@ within B(i) before instruction i
                
             }
         }
-        System.out.println();
+        //System.out.println();
     }
 
 
