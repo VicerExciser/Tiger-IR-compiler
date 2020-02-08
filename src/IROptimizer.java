@@ -253,20 +253,38 @@ within B(i) before instruction i
         for(IRInstruction j : f.instructions) { // for instruction j in the function,
             if(IRUtil.isDefinition(j)) { // that is a def,
                 IROperand jx = j.operands[0];
+               
                 if(y != null && z != null) {
-                    System.out.println("i: " + String.valueOf(i.irLineNumber) + " " + x.toString() + " " + 
-                            y.toString() + " " + z.toString() + ". j: " + String.valueOf(j.irLineNumber) + " " + jx.toString());
+                    System.out.println("i: " + String.valueOf(i.irLineNumber) + " \"" + x.toString() + " " + 
+                            y.toString() + " " + z.toString() + "\". j: " + String.valueOf(j.irLineNumber) + " \"" + jx.toString()
+                            + "\"");
                 }else if(y != null) {
-                    System.out.println("i: " + String.valueOf(i.irLineNumber) + " " + x.toString() + " " + 
-                            y.toString() + ". j: " + String.valueOf(j.irLineNumber) + " " + jx.toString());
+                    System.out.println("i: " + String.valueOf(i.irLineNumber) + " \"" + x.toString() + " " + 
+                            y.toString() + "\". j: " + String.valueOf(j.irLineNumber) + " \"" + jx.toString()+ "\"");
                 }else {
-                    System.out.println("i: " + String.valueOf(i.irLineNumber) + " " + x.toString() + ". j: " + String.valueOf(j.irLineNumber) + " " + jx.toString());
+                    System.out.println("i: " + String.valueOf(i.irLineNumber) + " \"" + x.toString() + "\". j: " + 
+                String.valueOf(j.irLineNumber) + " \"" + jx.toString() + "\"");
                 }
-                if(jx.equals(y) || jx.equals(z)) { // that writes to y or z,
-                    // need to check if it reaches instead of blindly adding to worklist
-                    mark.add(j);
-                    worklst.add(j);
+                
+                if(y != null) {
+                    if(jx.toString().equals(y.toString())){
+                        mark.add(j);
+                        worklst.add(j);
+                        
+                       /*  System.out.println("j: " +  String.valueOf(j.irLineNumber) + " has been marked. It has jx of \"" + 
+                                jx.toString() + "\" and y of \"" + y.toString() + "\""); */
+                    }
                 }
+                if(z != null) {
+                    if(jx.toString().equals(z.toString())){
+                        mark.add(j);
+                        worklst.add(j);
+                        
+                        /* System.out.println("j: " +  String.valueOf(j.irLineNumber) + " has been marked. It has jx of \"" + 
+                                jx.toString() + "\" and z of \"" + z.toString() + "\""); */
+                    }
+                }
+               
             }
         }
         System.out.println();
