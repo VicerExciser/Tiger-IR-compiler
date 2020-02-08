@@ -239,17 +239,19 @@ within B(i) before instruction i
     // @param worklst the worklist
     // @param mark the marked set
     public static void smallBlocks(IRFunction f, IRInstruction i, PriorityQueue<IRInstruction> worklst, Set<IRInstruction> mark) {
-        // TODO: call smallBlocks from main
 
         IROperand x = i.operands[0];
         IROperand y = i.operands.length > 1 ? i.operands[1] : null;
         IROperand z = i.operands.length > 2 ? i.operands[2] : null;
         
-        for(IRInstruction j : f.instructions) { // for instruction j in the function,
+        BasicBlockBase iBlock = i.belongsToBlock;
+        
+        for(IRInstruction j : f.instructions) { // 1. for instruction j in the function,
             if(j.equals(i)) {
+                //sanity repeat check. don't ask why
                 break;
             }
-            if(IRUtil.isDefinition(j)) { // that is a def,
+            if(IRUtil.isDefinition(j)) { // 2. that is a def,
                 IROperand jx = j.operands[0];
                
                 
@@ -266,40 +268,60 @@ within B(i) before instruction i
                 }
                 
                 
-                if(y != null) {
+                if(y != null) { // 3. of y, 
                     if(jx.toString().equals(y.toString())){
                         mark.add(j);
                         worklst.add(j);
                         
-                         System.out.println("j: " +  String.valueOf(j.irLineNumber) + " has been marked. It has jx of \"" + 
-                                jx.toString() + "\" and y of \"" + y.toString() + "\""); 
+                        // 4. that reaches i,
+                        /**if(iBlock.in.contains(j)) { // 5. if it is in the IN set for the BB(i)
+                            mark.add(j);
+                            worklst.add(j);
+                        }**/
+                        // TODO: condition 2
+                        
+                         //System.out.println("j: " +  String.valueOf(j.irLineNumber) + " has been marked. It has jx of \"" + jx.toString() + "\" and y of \"" + y.toString() + "\""); 
                     }
                 }
-                if(z != null) {
+                if(z != null) { // 3. or z,
                     if(jx.toString().equals(z.toString())){
                         mark.add(j);
                         worklst.add(j);
                         
-                         System.out.println("j: " +  String.valueOf(j.irLineNumber) + " has been marked. It has jx of \"" + 
-                                jx.toString() + "\" and z of \"" + z.toString() + "\""); 
+                        // 4. that reaches i,
+                       /** if(iBlock.in.contains(j)) { // 5. if it is in the IN set for the BB(i)
+                            mark.add(j);
+                            worklst.add(j);
+                        }**/
+                        // TODO: condition 2
+                        
+                         //System.out.println("j: " +  String.valueOf(j.irLineNumber) + " has been marked. It has jx of \"" + jx.toString() + "\" and z of \"" + z.toString() + "\""); 
                     }
                 }
+                
                 if(IRUtil.isXUse(i)) {
-                    // if I's "x" slot holds a use of a variable. Really only array assignments and returns
+                    // if i's "x" slot holds a use of a variable. Really only array assignments and returns
                     if(jx.toString().equals(x.toString())){
                         mark.add(j);
                         worklst.add(j);
                         
-                         System.out.println("j: " +  String.valueOf(j.irLineNumber) + " has been marked. It has jx of \"" + 
-                                jx.toString() + "\" and x of \"" + x.toString() + "\""); 
+                        // 4. that reaches i,
+                        /**if(iBlock.in.contains(j)) { // 5. if it is in the IN set for the BB(i)
+                            mark.add(j);
+                            worklst.add(j);
+                        }**/
+                        // TODO: condition 2
+                        
+                        // System.out.println("j: " +  String.valueOf(j.irLineNumber) + " has been marked. It has jx of \"" + jx.toString() + "\" and x of \"" + x.toString() + "\""); 
                     }
                 }
                
             }
         }
-        System.out.println();
+        //System.out.println();
     }
-
+    //if it is in the IN set for the basic
+    //block B(i) containing i, and 
 
 
     ////  TODO  ////

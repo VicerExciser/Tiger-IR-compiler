@@ -2,6 +2,8 @@ package ir.cfg;
 
 import ir.IRFunction;
 import ir.IRInstruction;
+import ir.IRUtil;
+import ir.operand.IROperand;
 
 
 /*		Minimal Basic Block 
@@ -25,13 +27,28 @@ public class MinBasicBlock extends BasicBlockBase {
 	public void computeLocalDefSets() {
 		// GEN[S] = set of definitions in S ("generated" by S)
 
-		//// TODO ////
+		gen.add(s);
 
 		// KILL[S] = set of definitions that may be overwritten by S 
 		//	(e.g., all definitions in program that write to S's lval,
 		//	whether or not the reach S)
 
-		//// TODO ////
+        IROperand x = s.operands[0];
+		
+		for(IRInstruction instruction : parent.instructions) {
+		    // for all instrs in the function
+		    if(IRUtil.isDefinition(instruction)) {
+		        // that are defs
+		        IROperand jx = instruction.operands[0];
+		        if(jx.toString().equals(x.toString())){
+		            // if they write to the same thing S writes to
+		            if(instruction.irLineNumber < s.irLineNumber) {
+		                // if the instruction came before S (aka can be killed by S
+		                kill.add(instruction);
+		            }
+		        }
+		    }
+		}
 
 	}
 
@@ -44,7 +61,7 @@ public class MinBasicBlock extends BasicBlockBase {
 		// OUT[S] = set of definitions in S as well as definitions from IN[S]
 		// 	that go beyond S (are not "killed" by S)
 
-		//// TODO ////
+		out = gen; //just until I can get around to it
 
 	}
 
