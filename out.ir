@@ -1,0 +1,26 @@
+#start_function
+int fib(int n):
+int-list: r, x, t1, t2
+float-list: 
+    brgt, if_label0, n, 1
+    goto, end
+if_label0:
+    sub, n, n, 1
+    callr, t1, fib, n
+    sub, x, n, 1
+    callr, t2, fib, x
+end:
+    return, r
+#end_function
+
+#start_function
+void main():
+int-list: x, y, z
+float-list: 
+    callr, x, geti
+    callr, z, fib, x
+    assign, x, z
+    call, puti, x
+    call, putc, 10
+#end_function
+
