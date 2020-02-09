@@ -115,15 +115,18 @@ public class ControlFlowGraph {
 			        addEdge(i.belongsToBlock, temp.belongsToBlock); //target
 			    }else if(i.opCode == IRInstruction.OpCode.RETURN) {
 			        // RETURN //
-			        IRInstruction temp = IRUtil.getLabelTarget(this.f, (IRLabelOperand)i.operands[0]);
-                    addEdge(i.belongsToBlock, temp.belongsToBlock);
+			        //IRInstruction temp = IRUtil.getLabelTarget(this.f, (IRLabelOperand)i.operands[0]);
+                    //addEdge(i.belongsToBlock, temp.belongsToBlock);
 			    }//else if(i.opCode == IRInstruction.OpCode.CALL) {
 			        // CALL //
 			        //to my knowledge, nothing needs to be done for a call or callr because we aren't optimising between functions
 			        // piazza @32
 			    //}
 			    else {
-			        addEdge(i.belongsToBlock, IRUtil.getInstructionAfterThis(this.f, i).belongsToBlock); // i+1
+			        IRInstruction t = IRUtil.getInstructionAfterThis(this.f, i);
+			        if(t != null) {
+			            addEdge(i.belongsToBlock, t.belongsToBlock); // i+1
+			        }
 			    }
 			    
 			}
