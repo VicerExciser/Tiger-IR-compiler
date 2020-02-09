@@ -103,6 +103,7 @@ public class IRUtil {
 	        	: criticalOps.contains(inst.opCode);
 	}
 	
+	
 	public static boolean isXUse(IRInstruction inst) {
 	    if(inst.opCode == IRInstruction.OpCode.RETURN) {
 	        return true;

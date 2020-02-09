@@ -56,7 +56,7 @@ public class MinBasicBlock extends BasicBlockBase {
 	public void computeGlobalDefSets(ControlFlowGraph cfg) {
 		// IN[S] = set of definitions that reach the entry point of S
 
-		//// TODO ////
+		in.clear();
 
 		// OUT[S] = set of definitions in S as well as definitions from IN[S]
 		// 	that go beyond S (are not "killed" by S)

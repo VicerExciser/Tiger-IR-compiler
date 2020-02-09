@@ -30,7 +30,7 @@ import java.util.Arrays;
 */
 public class ControlFlowGraph {
 
-	public static final boolean USE_MAXIMAL_BLOCKS = true;	// Else, MinBasicBlock instances will be used
+	public static final boolean USE_MAXIMAL_BLOCKS = false;	// Else, MinBasicBlock instances will be used
 
 	private IRFunction f;
 	private Set<BasicBlockBase> blocks;
@@ -88,12 +88,44 @@ public class ControlFlowGraph {
 			}
 		}
 		else {
+		    // MINIMAL BLOCKS
 			for (IRInstruction i : this.f.instructions) {
+			    // Generate BBs for every inst
 				BasicBlockBase newBlock = new MinBasicBlock(this.f, i);
 				////  TODO  ////
 				// Will require some analysis of the instruction i here to decide
 				// how edges should be created to connect to other blocks...
 				////  TODO  ////
+			}
+			for(IRInstruction i : this.f.instructions) { // categorise instructions
+				IROperand x = i.operands[0];
+			    IROperand y = i.operands.length > 1 ? i.operands[1] : null;
+			    IROperand z = i.operands.length > 2 ? i.operands[2] : null;
+			    
+			    // if i is a control flow instruction, then assign edges acordingly. otherwise, just set it to the next inst
+			    
+			    if(i.opCode == IRInstruction.OpCode.GOTO) { 
+			        // GOTO //
+			        IRInstruction temp = IRUtil.getLabelTarget(this.f, (IRLabelOperand)i.operands[0]);
+			        addEdge(i.belongsToBlock, temp.belongsToBlock);
+			    }else if (IRUtil.isConditionalBranch(i)) {
+			        // BRANCH //
+			        addEdge(i.belongsToBlock, IRUtil.getInstructionAfterThis(this.f, i).belongsToBlock); //i+1
+			        IRInstruction temp = IRUtil.getLabelTarget(this.f, (IRLabelOperand)i.operands[0]);
+			        addEdge(i.belongsToBlock, temp.belongsToBlock); //target
+			    }else if(i.opCode == IRInstruction.OpCode.RETURN) {
+			        // RETURN //
+			        IRInstruction temp = IRUtil.getLabelTarget(this.f, (IRLabelOperand)i.operands[0]);
+                    addEdge(i.belongsToBlock, temp.belongsToBlock);
+			    }//else if(i.opCode == IRInstruction.OpCode.CALL) {
+			        // CALL //
+			        //to my knowledge, nothing needs to be done for a call or callr because we aren't optimising between functions
+			        // piazza @32
+			    //}
+			    else {
+			        addEdge(i.belongsToBlock, IRUtil.getInstructionAfterThis(this.f, i).belongsToBlock); // i+1
+			    }
+			    
 			}
 		}
 
@@ -148,6 +180,11 @@ public class ControlFlowGraph {
 					OUT[B] = GEN[B] ∪ (IN[B] - KILL[B])
 	 */
 	public void generateReachingDefSets() {
+	    if (!USE_MAXIMAL_BLOCKS) {
+	        // Minimal blocks
+	        
+	        
+	    }
 		MaxBasicBlock bb;
 //		Set<IRInstruction> universalDefinitions = new LinkedHashSet<>();
 		universalDefinitions.clear();

@@ -244,7 +244,7 @@ within B(i) before instruction i
         IROperand y = i.operands.length > 1 ? i.operands[1] : null;
         IROperand z = i.operands.length > 2 ? i.operands[2] : null;
         
-        BasicBlockBase iBlock = i.belongsToBlock;
+        BasicBlockBase iBlock = i.belongsToBlock; // WILL HAVE TO MORE THAN LIKELY CHANGE THIS DUE TO MINIMAL BLOCKS
         
         for(IRInstruction j : f.instructions) { // 1. for instruction j in the function,
             if(j.equals(i)) {
