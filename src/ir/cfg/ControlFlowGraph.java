@@ -115,6 +115,9 @@ public class ControlFlowGraph {
 			        addEdge(i.belongsToBlock, temp.belongsToBlock); //target
 			    }else if(i.opCode == IRInstruction.OpCode.RETURN) {
 			        // RETURN //
+			        
+			        // since a return instruction leaves a cfg, it doesn't have any edges out of it. same logic as call/r
+			        
 			        //IRInstruction temp = IRUtil.getLabelTarget(this.f, (IRLabelOperand)i.operands[0]);
                     //addEdge(i.belongsToBlock, temp.belongsToBlock);
 			    }//else if(i.opCode == IRInstruction.OpCode.CALL) {
@@ -185,8 +188,21 @@ public class ControlFlowGraph {
 	public void generateReachingDefSets() {
 	    if (!USE_MAXIMAL_BLOCKS) {
 	        // Minimal blocks
+	        MinBasicBlock basicBlock;
+	        	        
+	        for(BasicBlockBase b : this.blocks) {
+	            basicBlock = (MinBasicBlock) b;
+	            
+	            // IN[bb] = ∪OUT[p] for p in the set of all predecessors of block bb
+	            for (BasicBlockBase p : basicBlock.predecessors) {
+	                basicBlock.in.addAll(p.out);
+                }
+	            
+	            // OUT[bb] = GEN[bb] ∪ (IN[bb] - KILL[bb])
+	            basicBlock.out = basicBlock.gen 
+	        }
 	        
-	        
+	        return;
 	    }
 		MaxBasicBlock bb;
 //		Set<IRInstruction> universalDefinitions = new LinkedHashSet<>();
