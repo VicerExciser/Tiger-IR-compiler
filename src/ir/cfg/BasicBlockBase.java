@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.TreeSet;
 import java.util.Map;
 import java.util.HashMap;
 // import java.util.Comparator;
@@ -21,6 +22,7 @@ public abstract class BasicBlockBase implements Comparable<BasicBlockBase> {
 	public IRInstruction leader;
 	public IRInstruction terminator;
 	public int size;
+	public int blocknum;
 
 	public Set<IRInstruction> gen;		// defs
 	public Set<IRInstruction> kill;
@@ -37,6 +39,11 @@ public abstract class BasicBlockBase implements Comparable<BasicBlockBase> {
 	// The following sets are populated when the CFG is constructed
 	public Set<BasicBlockBase> predecessors;
 	public Set<BasicBlockBase> successors;
+
+	public Set<BasicBlockBase> dom;
+	public BasicBlockBase iDom;		// Immediate dominator block
+
+	static int BLOCKNUM = 0;
 
 	public BasicBlockBase(IRFunction parent, int size,
 			IRInstruction leader, IRInstruction terminator) {
@@ -57,8 +64,17 @@ public abstract class BasicBlockBase implements Comparable<BasicBlockBase> {
 		this.operandDefs = new HashMap<>();
 		this.operandUses = new HashMap<>();
 
-		this.predecessors = new LinkedHashSet<>();
-		this.successors = new LinkedHashSet<>();
+		// this.predecessors = new LinkedHashSet<>();
+		// this.successors = new LinkedHashSet<>();
+		this.predecessors = new TreeSet<>();
+		this.successors = new TreeSet<>();
+
+		this.dom  = new LinkedHashSet<>();
+		// this.dom.add(this);
+		this.iDom = null;
+		
+		this.blocknum = BLOCKNUM;
+		BLOCKNUM += 1;
 	}
 
 	// Constructor overload specifically for MinBasicBlock instances
@@ -77,7 +93,8 @@ public abstract class BasicBlockBase implements Comparable<BasicBlockBase> {
 
 	@Override 
 	public int compareTo(BasicBlockBase other) {
-		return this.id.compareToIgnoreCase(other.id);
+		// return this.id.compareToIgnoreCase(other.id);
+		return this.blocknum - other.blocknum;
 	}
 
 	@Override 
@@ -86,6 +103,7 @@ public abstract class BasicBlockBase implements Comparable<BasicBlockBase> {
 		result = 31 * result + this.parent.name.toLowerCase().hashCode();
 		result = 31 * result + this.leader.irLineNumber;
 		result = 31 * result + this.terminator.irLineNumber;
+		result = 31 * result + this.id.hashCode();
 		return result;
 	}
 

@@ -7,8 +7,8 @@ import ir.cfg.BasicBlockBase;
 	that connects two basic block vertices in a control flow graph.
 */
 public class CFGEdge {
-	BasicBlockBase start;
-	BasicBlockBase end;
+	public BasicBlockBase start;
+	public BasicBlockBase end;
 	
 	public CFGEdge(BasicBlockBase start, BasicBlockBase end) {
 		this.start = start;
@@ -21,5 +21,13 @@ public class CFGEdge {
 				&&  (obj instanceof CFGEdge)
 				&&  (this.start.equals(((CFGEdge)obj).start))
 				&&  (this.end.equals(((CFGEdge)obj).end));
+	}
+
+	@Override 
+	public int hashCode() {
+		int result = 17;
+		result = 31 * result + this.start.hashCode();
+		result = 31 * result + this.end.hashCode();
+		return result;
 	}
 }

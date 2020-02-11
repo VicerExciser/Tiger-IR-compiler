@@ -105,14 +105,16 @@ public class IRUtil {
 	
 	
 	public static boolean isXUse(IRInstruction inst) {
-	    if(inst.opCode == IRInstruction.OpCode.RETURN) {
-	        return true;
-	    }
-	    if(isArrayAssignment(inst)) {
-	        return true;
-	    }
-	    
-	    return false;
+	    return inst.opCode == IRInstruction.OpCode.RETURN
+	    		|| inst.opCode == IRInstruction.OpCode.ASSIGN 
+	    		|| inst.opCode == IRInstruction.OpCode.CALL 
+	    		|| inst.opCode == IRInstruction.OpCode.CALLR 
+	    		|| inst.opCode == IRInstruction.OpCode.ARRAY_STORE
+	    		|| isBinaryOp(inst) || isConditionalBranch(inst);
+	    // if(isArrayAssignment(inst)) {
+	    //     return true;
+	    // }
+	    // return false;
 	}
 
 	public static boolean isCritical(MinBasicBlock block) {
@@ -237,6 +239,8 @@ public class IRUtil {
 		Set<IRVariableOperand> sources = new HashSet<>(2);
 		int len = inst.operands.length;
 		int i;
+
+		if (!isXUse(inst)) return sources;
 
 		if (isDefinition(inst)) {
 			if (isBinaryOp(inst)) {    // op, x, y, z

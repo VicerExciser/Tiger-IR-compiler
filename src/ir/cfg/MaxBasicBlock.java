@@ -4,6 +4,7 @@ import ir.*;
 import ir.operand.IRVariableOperand;
 
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Set;
 import java.util.LinkedHashSet;
 
@@ -43,7 +44,7 @@ public class MaxBasicBlock extends BasicBlockBase {
 
 	// Return true if the first statement in this block is a LABEL, else false
 	public boolean beginsWithLabel() {
-		return this.topLabel == null;
+		return this.topLabel != null;
 	}
 	
 	// Return true if successful, else false if current terminator is a control 
@@ -55,6 +56,50 @@ public class MaxBasicBlock extends BasicBlockBase {
 		this.terminator = inst;
 		inst.belongsToBlock = (BasicBlockBase)this;
 		return true;
+	}
+
+	public boolean removeInstruction(IRInstruction inst) {
+		boolean retVal = false;
+		List<IRInstruction> instList = new ArrayList<>(this.instructions);
+		IRInstruction prev = null;
+		IRInstruction curr = null;
+		IRInstruction next = null;
+		int i = 0;
+		while (i < instList.size()) 
+		{
+			if (!this.instructions.contains(instList.get(i))) {
+				i++;
+				continue;
+			}
+
+			curr = instList.get(i);
+
+			next = (i+1 < instList.size() && this.instructions.contains(instList.get(i+1)))
+					? instList.get(i+1) : null;
+			// 	next = instList.get(i+1);
+			// else
+			// 	next = null;
+
+			if (curr.equals(inst)) {
+				if (this.leader.equals(inst)) {
+					this.leader = next;
+					if (next != null) next.isLeader = true;
+				}
+				if (this.terminator.equals(inst))
+					this.terminator = prev;
+
+				if (inst.belongsToBlock.equals(this))
+					inst.belongsToBlock = null;
+
+				retVal = this.instructions.remove(inst);
+				this.size = this.instructions.size();
+				break;
+			}
+
+			prev = curr;
+			i++;
+		}
+		return retVal;
 	}
 
 	// Populates this block's GEN set, as well as the mappings for

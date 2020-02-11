@@ -1,5 +1,3 @@
-
-
 package ir.cfg;
 
 import ir.cfg.*;
@@ -9,6 +7,8 @@ import ir.IRInstruction;
 import ir.operand.IROperand;
 import ir.operand.IRLabelOperand;
 import ir.operand.IRVariableOperand;
+
+import ir.IRPrinter;
 
 import java.util.Set;
 import java.util.HashSet;
@@ -30,12 +30,22 @@ import java.util.Arrays;
 */
 public class ControlFlowGraph {
 
-	public static final boolean USE_MAXIMAL_BLOCKS = false;	// Else, MinBasicBlock instances will be used
+	public static final boolean USE_MAXIMAL_BLOCKS = true; //false;	// Else, MinBasicBlock instances will be used
 
 	private IRFunction f;
 	private Set<BasicBlockBase> blocks;
 	private Set<CFGEdge> edges;
 	private Set<IRInstruction> universalDefinitions;
+
+	// private Set<BasicBlockBase> dom;
+	// public BasicBlockBase iDom;
+
+	public DominatorTree domTree;
+
+	//// Possible structures for simplifying reaching definition lookups:
+	// public Map<String, Set<IRInstruction>> universalUseMap;
+	// public Map<String, Set<IRInstruction>> universalDefMap;
+
 	BasicBlockBase entryNode;
 
 	public ControlFlowGraph(IRFunction f) {
@@ -60,9 +70,54 @@ public class ControlFlowGraph {
 
 			// Need to construct the basic blocks for each leader in this function first
 			for (IRInstruction i : this.f.instructions) {
+
+				BasicBlockBase a, b;	// For debug
+
 				if (i.isLeader) {
 					if (curr != null) {	// Then add an edge from curr to block with leader i
-						addEdge(curr, i.belongsToBlock);
+
+						boolean skipEdge = false;	//// TODO: Think of more cases for skipping CFG edge creation ////
+						if (curr.terminator.opCode == IRInstruction.OpCode.GOTO) {
+							if (!((MaxBasicBlock) i.belongsToBlock).beginsWithLabel())
+								skipEdge = true;
+							else {
+								IRInstruction currTarget = IRUtil.getLabelTarget(this.f, 
+									(IRLabelOperand) curr.terminator.operands[0]);
+								if (((MaxBasicBlock) i.belongsToBlock).topLabel.equals(currTarget) 
+										|| ((MaxBasicBlock) i.belongsToBlock).instructions.contains(currTarget))
+									skipEdge = false;
+								else
+									skipEdge = true;
+							}
+						}
+
+						if (!skipEdge) {
+							a = curr;
+							b = i.belongsToBlock;
+							boolean printDebugInfo = (a.id.equalsIgnoreCase("fib::7")) && (b.id.equalsIgnoreCase("fib::9"));
+
+							if (printDebugInfo) {
+								System.out.println("[CFG (i.isLeader)] Connecting blocks "+curr.blocknum+" --> "+i.belongsToBlock.blocknum);
+								IRPrinter debugPrinter = new IRPrinter(System.out);
+								System.out.print("i: ");
+								debugPrinter.printInstruction(i);
+								System.out.print("\n________["+curr.blocknum+"] from:\n");
+								// debugPrinter.printInstruction(curr.leader);
+								for (IRInstruction inst : ((MaxBasicBlock)curr).instructions) {
+									debugPrinter.printInstruction(inst);
+								}
+								System.out.print("\n________["+b.blocknum+"] to:\n");
+								for (IRInstruction inst : ((MaxBasicBlock)b).instructions) {
+									debugPrinter.printInstruction(inst);
+								}
+								System.out.println();
+							}
+
+							addEdge(curr, i.belongsToBlock);
+						}
+						else 
+							System.out.println("[CFG (i.isLeader)] Skipping edge from "+curr.blocknum+" --> "+i.belongsToBlock.blocknum);
+						
 					}
 					curr = i.belongsToBlock;
 				}
@@ -70,20 +125,47 @@ public class ControlFlowGraph {
 				// If i is a goto with target t then add an edge from curr to t
 				if (i.opCode == IRInstruction.OpCode.GOTO) {
 					IRInstruction t = IRUtil.getLabelTarget(this.f, (IRLabelOperand)i.operands[0]);
+
+					((MaxBasicBlock)curr).appendInstruction(i);
+/*
+					a = curr;
+					b = t.belongsToBlock;
+					printDebugInfo = (a.id.equalsIgnoreCase("fib::7")) && (b.id.equalsIgnoreCase("fib::9"));
+					if (printDebugInfo) {
+						System.out.println("[CFG (GOTO)] Connecting blocks "+curr.blocknum+" --> "+t.belongsToBlock.blocknum);
+					}
+*/
 					addEdge(curr, t.belongsToBlock);
+					// if (i.belongsToBlock != null)
+					// 	addEdge(i.belongsToBlock, t.belongsToBlock);
 				}
 				else if (IRUtil.isConditionalBranch(i)) {
 					// Append condition c to curr (i may already belong to block curr, but append is safe)
 					((MaxBasicBlock)curr).appendInstruction(i);	// <-- algorithm calls for it, but truly think its unnecessary
-
-					// Add an edge from curr to i+1
+/*
+					a = curr;
+					b = IRUtil.getInstructionAfterThis(i).belongsToBlock;
+					printDebugInfo = (a.id.equalsIgnoreCase("fib::7")) && (b.id.equalsIgnoreCase("fib::9"));
+					if (printDebugInfo) {
+						System.out.println("[CFG (cond branch 1)] Connecting blocks "+curr.blocknum+" --> "+IRUtil.getInstructionAfterThis(i).belongsToBlock.blocknum);
+					}
+*/
+					// Add an edge from curr to i+1		
 					addEdge(curr, IRUtil.getInstructionAfterThis(i).belongsToBlock);
 
 					// Add an edge from curr to label target t
 					IRInstruction t = IRUtil.getLabelTarget(this.f, (IRLabelOperand)i.operands[0]);
+/*
+					a = curr;
+					b = t.belongsToBlock;
+					printDebugInfo = (a.id.equalsIgnoreCase("fib::7")) && (b.id.equalsIgnoreCase("fib::9"));
+					if (printDebugInfo) {
+						System.out.println("[CFG (cond branch 2)] Connecting blocks "+curr.blocknum+" --> "+t.belongsToBlock.blocknum);
+					}
+*/
 					addEdge(curr, t.belongsToBlock);
 				}
-				else
+				else if (i.opCode != IRInstruction.OpCode.LABEL)
 					((MaxBasicBlock)curr).appendInstruction(i);
 			}
 		}
@@ -113,14 +195,15 @@ public class ControlFlowGraph {
 			        addEdge(i.belongsToBlock, IRUtil.getInstructionAfterThis(this.f, i).belongsToBlock); //i+1
 			        IRInstruction temp = IRUtil.getLabelTarget(this.f, (IRLabelOperand)i.operands[0]);
 			        addEdge(i.belongsToBlock, temp.belongsToBlock); //target
-			    }else if(i.opCode == IRInstruction.OpCode.RETURN) {
+			    }
+			    //else if(i.opCode == IRInstruction.OpCode.RETURN) {
 			        // RETURN //
 			        
 			        // since a return instruction leaves a cfg, it doesn't have any edges out of it. same logic as call/r
 			        
 			        //IRInstruction temp = IRUtil.getLabelTarget(this.f, (IRLabelOperand)i.operands[0]);
                     //addEdge(i.belongsToBlock, temp.belongsToBlock);
-			    }//else if(i.opCode == IRInstruction.OpCode.CALL) {
+			    //}//else if(i.opCode == IRInstruction.OpCode.CALL) {
 			        // CALL //
 			        //to my knowledge, nothing needs to be done for a call or callr because we aren't optimising between functions
 			        // piazza @32
@@ -135,11 +218,104 @@ public class ControlFlowGraph {
 			}
 		}
 
+/*
+		// Remove any erroneous CFG edges (e.g., between a block ending with a GOTO and a non-target block)
+		// -- Temporary until edge creation logic is patched --
+		Set <CFGEdge> toRemove = new HashSet<>();
+		for (CFGEdge edge : this.edges) {
+			boolean remove = false;
+			if (edge.start.terminator.opCode == IRInstruction.OpCode.GOTO) {
+				if (!((MaxBasicBlock)edge.end).beginsWithLabel()) remove = true;
+				else {
+					IRInstruction target = IRUtil.getLabelTarget(this.f, (IRLabelOperand)edge.start.terminator.operands[0]);
+
+					if (edge.end.leader.opCode == IRInstruction.OpCode.LABEL) {
+						if (!edge.end.leader.equals(target)) remove = true;
+					} else {
+						int idx = 0;
+						IRInstruction firstInst = ((IRInstruction[])(((MaxBasicBlock)edge.end).instructions.toArray()))[idx];
+						while (firstInst.opCode == IRInstruction.OpCode.LABEL) {
+							if (((IRLabelOperand)(firstInst.operands[0])).getName().equalsIgnoreCase(
+									((IRLabelOperand)((MaxBasicBlock)edge.start).terminator.operands[0]).getName()))
+								remove = false;
+							else remove = true;
+							idx++;
+							firstInst = ((IRInstruction[])(((MaxBasicBlock)edge.end).instructions.toArray()))[idx];
+						}
+					}
+				}
+
+				if (remove) toRemove.add(edge);
+			}
+		}
+		this.edges.removeAll(toRemove);
+*/
+
+		// Update successors and predecessors for all basic blocks
+		for (CFGEdge edge : this.edges) {
+			edge.start.successors.addAll(edge.end.successors);
+			edge.end.predecessors.addAll(edge.start.predecessors);
+		}
+
 		generateReachingDefSets();
+		generateDominatorTree();
+		generateDominatorTree();
 	}
+
+	private void generateDominatorTree() {
+		for (BasicBlockBase block : this.blocks) {
+			block.dom.add(this.entryNode);	// All blocks dominated by the root node and themself
+			if (block.equals(this.entryNode)) continue;
+			block.dom.add(block);
+			
+			if (blockHasSingleEntry(block)) {
+				for (CFGEdge edge : this.edges) {
+					if (edge.end.equals(block)) {
+						block.iDom = edge.start;
+						// block.dom.addAll(block.iDom.dom);
+
+						Set<BasicBlockBase> predDoms = new LinkedHashSet<>(this.blocks);
+						for (BasicBlockBase p : block.predecessors) {
+							predDoms.retainAll(p.dom);
+						}
+						block.dom.addAll(predDoms);
+					}
+				}
+			}
+			else {
+				for (CFGEdge edge : this.edges) {
+					if (edge.end.equals(block)) {
+						boolean uniqueDomFound = false;
+						BasicBlockBase pred = edge.start;
+						Set<BasicBlockBase> predSet = pred.predecessors;
+
+						while (!uniqueDomFound) {
+							boolean hasControlFlowInst = false;
+							for (BasicBlockBase p : predSet) {
+								if (blockHasSingleEntry(p)) {
+									if (IRUtil.isControlFlow(p.terminator)) {
+										hasControlFlowInst = true;
+										uniqueDomFound = true;
+										block.dom.addAll(p.dom);
+										block.iDom = p;
+										break;
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	
+	//// CURRENT BUG BELOW:  labels are being doubly added: to end of one block && the start of the next block  ////
 
 	// NOTE: Also currently only implemented for using MaxBasicBlocks
 	private void generateInitialBlocks(List<IRInstruction> instructions) {
+		IRPrinter debugPrinter = new IRPrinter(System.out);
+
 		for (IRInstruction i : instructions) {
 			if ((i.isLeader || i.opCode == IRInstruction.OpCode.LABEL)
 					&& i.belongsToBlock == null) {
@@ -160,19 +336,35 @@ public class ControlFlowGraph {
 				newBlock = new MaxBasicBlock(this.f, instsToAdd);
 				// i.belongsToBlock = newBlock;		// <-- handled by the *BasicBlock constructor
 
-				if (this.blocks.isEmpty())
+				// FOR DEBUG
+				for (IRInstruction addedInst : instsToAdd) {
+					System.out.print("[generateInitialBlocks] ADDING TO BLOCK "+newBlock.blocknum+":\t");
+					debugPrinter.printInstruction(addedInst);
+				}
+				System.out.println();
+				// FOR DEBUG
+
+				if (this.blocks.isEmpty()) {
 					this.entryNode = newBlock;
+					this.domTree = new DominatorTree(newBlock);
+				}
 
 				this.blocks.add(newBlock);
+
+				// newBlock.dom.add(this.entryNode);	// All blocks dominated by the root node and themself
+				// newBlock.dom.add(newBlock);
 			}
 		}
 	}
+
 
 	private void addEdge(BasicBlockBase from, BasicBlockBase to) {
 		// TODO: Assert that neither from nor to is null
 		CFGEdge newEdge = new CFGEdge(from, to);
 		from.successors.add(to);
+		from.successors.addAll(to.successors);
 		to.predecessors.add(from);
+		to.predecessors.addAll(from.predecessors);
 		this.edges.add(newEdge);
 	}
 
@@ -199,7 +391,7 @@ public class ControlFlowGraph {
                 }
 	            
 	            // OUT[bb] = GEN[bb] ∪ (IN[bb] - KILL[bb])
-	            basicBlock.out = basicBlock.gen 
+	            basicBlock.out = basicBlock.gen;		//// TODO (finish from here) ////
 	        }
 	        
 	        return;
@@ -288,6 +480,64 @@ public class ControlFlowGraph {
 			}
 		}
 
+	}
+
+	public void printAllBasicBlocks() {
+		IRPrinter blockPrinter = new IRPrinter(System.out);
+		for (BasicBlockBase block : this.blocks) {
+			if (USE_MAXIMAL_BLOCKS) {
+				MaxBasicBlock bb = (MaxBasicBlock) block;
+				System.out.println("\n____ BLOCK ["+bb.blocknum+"]: \""+bb.id+"\" ____");
+				for (IRInstruction i : bb.instructions) {
+					blockPrinter.printInstruction(i);
+				}
+				System.out.print("\nPREDS: { ");
+				for (BasicBlockBase p : bb.predecessors) {
+					System.out.print(String.valueOf(p.blocknum) + ", ");
+				}
+				System.out.print(" }\nSUCCS: { ");
+				for (BasicBlockBase s : bb.successors) {
+					System.out.print(String.valueOf(s.blocknum) + ", ");
+				}
+				System.out.println(" }\n");
+				if (bb.iDom != null)
+					System.out.println("IDom("+bb.blocknum+") = "+bb.iDom.blocknum+"\n");
+				System.out.print("\nDOMS: { ");
+				for (BasicBlockBase d : bb.dom) {
+					System.out.print(String.valueOf(d.blocknum) + ", ");
+				}
+				System.out.println(" }\n");
+				//// TODO: Maybe print the GEN, KILL, IN, and OUT sets for each block as well?
+			}
+		}
+	}
+
+	public int getBlockIndex(BasicBlockBase bb) {
+		List<BasicBlockBase> blockList = new ArrayList<>(this.blocks);
+		return blockList.indexOf(bb);
+	}
+
+	public BasicBlockBase getBlockByNumber(int blocknum) {
+		for (BasicBlockBase bb : this.blocks) {
+			if (bb.blocknum == blocknum)
+				return bb;
+		}
+		return null;
+	}
+
+	public boolean blockHasSingleEntry(BasicBlockBase bb) {
+		// boolean foundSingleEntry = false;
+		if (bb.equals(this.entryNode)) return true;
+		int occurrences = 0;
+		for (CFGEdge edge : this.edges) {
+			if (edge.end.equals(bb)) {
+				// if (!foundSingleEntry) foundSingleEntry = true;
+				// else return false;
+				occurrences++;
+			}
+		}
+		// return foundSingleEntry;
+		return occurrences == 1;
 	}
 
 	public Set<CFGEdge> getEdges() {
