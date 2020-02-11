@@ -22,7 +22,8 @@ public class IRUtil {
 	public static class InstructionComparator implements Comparator<IRInstruction> {
 		@Override
         public int compare(IRInstruction instA, IRInstruction instB) {
-            return instA.irLineNumber - instB.irLineNumber;
+            // return instA.irLineNumber - instB.irLineNumber;
+            return instB.irLineNumber - instA.irLineNumber;		// Reversed order
         }
     }
 
@@ -102,6 +103,10 @@ public class IRUtil {
 	        	? isArrayAssignment(inst)
 	        	: criticalOps.contains(inst.opCode);
 	}
+
+	public static boolean isCritical(MinBasicBlock block) {
+		return isCritical(block.s);
+	}
 	
 	
 	public static boolean isXUse(IRInstruction inst) {
@@ -117,9 +122,6 @@ public class IRUtil {
 	    // return false;
 	}
 
-	public static boolean isCritical(MinBasicBlock block) {
-		return isCritical(block.s);
-	}
 
 	public static boolean isArrayAssignment(IRInstruction inst) {
 		if (inst.opCode != IRInstruction.OpCode.ASSIGN) return false;

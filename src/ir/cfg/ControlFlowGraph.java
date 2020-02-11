@@ -92,10 +92,10 @@ public class ControlFlowGraph {
 						}
 
 						if (!skipEdge) {
+/*
 							a = curr;
 							b = i.belongsToBlock;
 							boolean printDebugInfo = (a.id.equalsIgnoreCase("fib::7")) && (b.id.equalsIgnoreCase("fib::9"));
-
 							if (printDebugInfo) {
 								System.out.println("[CFG (i.isLeader)] Connecting blocks "+curr.blocknum+" --> "+i.belongsToBlock.blocknum);
 								IRPrinter debugPrinter = new IRPrinter(System.out);
@@ -112,12 +112,13 @@ public class ControlFlowGraph {
 								}
 								System.out.println();
 							}
-
+*/
 							addEdge(curr, i.belongsToBlock);
 						}
+/*
 						else 
 							System.out.println("[CFG (i.isLeader)] Skipping edge from "+curr.blocknum+" --> "+i.belongsToBlock.blocknum);
-						
+*/						
 					}
 					curr = i.belongsToBlock;
 				}
@@ -259,46 +260,51 @@ public class ControlFlowGraph {
 
 		generateReachingDefSets();
 		generateDominatorTree();
-		generateDominatorTree();
 	}
 
+	/**	Dominance:
+		In a flow graph with entry node b0, node bi dominates node bj, written bi >= bj,
+		if and only if bi lies on every path from b0 to bj.
+	 */
 	private void generateDominatorTree() {
-		for (BasicBlockBase block : this.blocks) {
-			block.dom.add(this.entryNode);	// All blocks dominated by the root node and themself
-			if (block.equals(this.entryNode)) continue;
-			block.dom.add(block);
-			
-			if (blockHasSingleEntry(block)) {
-				for (CFGEdge edge : this.edges) {
-					if (edge.end.equals(block)) {
-						block.iDom = edge.start;
-						// block.dom.addAll(block.iDom.dom);
+		for (int iters = 0; iters < 2; iters++) {		// Run computations twice
+			for (BasicBlockBase block : this.blocks) {
+				block.dom.add(this.entryNode);	// All blocks dominated by the root node and themself
+				if (block.equals(this.entryNode)) continue;
+				block.dom.add(block);
+				
+				if (blockHasSingleEntry(block)) {
+					for (CFGEdge edge : this.edges) {
+						if (edge.end.equals(block)) {
+							block.iDom = edge.start;
+							// block.dom.addAll(block.iDom.dom);
 
-						Set<BasicBlockBase> predDoms = new LinkedHashSet<>(this.blocks);
-						for (BasicBlockBase p : block.predecessors) {
-							predDoms.retainAll(p.dom);
+							Set<BasicBlockBase> predDoms = new LinkedHashSet<>(this.blocks);
+							for (BasicBlockBase p : block.predecessors) {
+								predDoms.retainAll(p.dom);
+							}
+							block.dom.addAll(predDoms);
 						}
-						block.dom.addAll(predDoms);
 					}
 				}
-			}
-			else {
-				for (CFGEdge edge : this.edges) {
-					if (edge.end.equals(block)) {
-						boolean uniqueDomFound = false;
-						BasicBlockBase pred = edge.start;
-						Set<BasicBlockBase> predSet = pred.predecessors;
+				else {
+					for (CFGEdge edge : this.edges) {
+						if (edge.end.equals(block)) {
+							boolean uniqueDomFound = false;
+							BasicBlockBase pred = edge.start;
+							Set<BasicBlockBase> predSet = pred.predecessors;
 
-						while (!uniqueDomFound) {
-							boolean hasControlFlowInst = false;
-							for (BasicBlockBase p : predSet) {
-								if (blockHasSingleEntry(p)) {
-									if (IRUtil.isControlFlow(p.terminator)) {
-										hasControlFlowInst = true;
-										uniqueDomFound = true;
-										block.dom.addAll(p.dom);
-										block.iDom = p;
-										break;
+							while (!uniqueDomFound) {
+								// boolean hasControlFlowInst = false;
+								for (BasicBlockBase p : predSet) {
+									if (blockHasSingleEntry(p)) {
+										if (IRUtil.isControlFlow(p.terminator)) {
+											// hasControlFlowInst = true;
+											uniqueDomFound = true;
+											block.dom.addAll(p.dom);
+											block.iDom = p;
+											break;
+										}
 									}
 								}
 							}
@@ -307,11 +313,21 @@ public class ControlFlowGraph {
 				}
 			}
 		}
+
+		List<BasicBlockBase> retryList = new ArrayList<>();
+		for (BasicBlockBase block : this.blocks) {
+			if (block.equals(this.entryNode)) continue;
+			if (this.domTree.add(block) == null)	// Add block as node in dominator tree; its parent will be its IDom
+				retryList.add(block);
+		}
+		for (BasicBlockBase retry : retryList)
+			this.domTree.add(retry);
+
+		// FOR DEBUG
+		this.domTree.printTree();
 	}
 
 	
-	//// CURRENT BUG BELOW:  labels are being doubly added: to end of one block && the start of the next block  ////
-
 	// NOTE: Also currently only implemented for using MaxBasicBlocks
 	private void generateInitialBlocks(List<IRInstruction> instructions) {
 		IRPrinter debugPrinter = new IRPrinter(System.out);
@@ -335,7 +351,7 @@ public class ControlFlowGraph {
 
 				newBlock = new MaxBasicBlock(this.f, instsToAdd);
 				// i.belongsToBlock = newBlock;		// <-- handled by the *BasicBlock constructor
-
+/*
 				// FOR DEBUG
 				for (IRInstruction addedInst : instsToAdd) {
 					System.out.print("[generateInitialBlocks] ADDING TO BLOCK "+newBlock.blocknum+":\t");
@@ -343,16 +359,13 @@ public class ControlFlowGraph {
 				}
 				System.out.println();
 				// FOR DEBUG
-
+*/
 				if (this.blocks.isEmpty()) {
 					this.entryNode = newBlock;
 					this.domTree = new DominatorTree(newBlock);
 				}
 
 				this.blocks.add(newBlock);
-
-				// newBlock.dom.add(this.entryNode);	// All blocks dominated by the root node and themself
-				// newBlock.dom.add(newBlock);
 			}
 		}
 	}
@@ -367,6 +380,7 @@ public class ControlFlowGraph {
 		to.predecessors.addAll(from.predecessors);
 		this.edges.add(newEdge);
 	}
+
 
 	// NOTE: Also currently only implemented for using MaxBasicBlocks
 	/*
@@ -396,6 +410,7 @@ public class ControlFlowGraph {
 	        
 	        return;
 	    }
+
 		MaxBasicBlock bb;
 //		Set<IRInstruction> universalDefinitions = new LinkedHashSet<>();
 		universalDefinitions.clear();
@@ -438,6 +453,8 @@ public class ControlFlowGraph {
 					}
 				}
 			}
+
+			bb.kill.removeAll(bb.gen);	// Unsure if generated defs within the block should be included or excluded from the KILL set...
 		}
 
 		// Initiate the iteration for computing each block's
@@ -485,6 +502,7 @@ public class ControlFlowGraph {
 	public void printAllBasicBlocks() {
 		IRPrinter blockPrinter = new IRPrinter(System.out);
 		for (BasicBlockBase block : this.blocks) {
+			System.out.println("________________________________________");
 			if (USE_MAXIMAL_BLOCKS) {
 				MaxBasicBlock bb = (MaxBasicBlock) block;
 				System.out.println("\n____ BLOCK ["+bb.blocknum+"]: \""+bb.id+"\" ____");
@@ -501,14 +519,35 @@ public class ControlFlowGraph {
 				}
 				System.out.println(" }\n");
 				if (bb.iDom != null)
-					System.out.println("IDom("+bb.blocknum+") = "+bb.iDom.blocknum+"\n");
-				System.out.print("\nDOMS: { ");
+					System.out.println("IDom("+bb.blocknum+") = "+bb.iDom.blocknum);
+				System.out.print("DOMS: { ");
 				for (BasicBlockBase d : bb.dom) {
 					System.out.print(String.valueOf(d.blocknum) + ", ");
 				}
-				System.out.println(" }\n");
-				//// TODO: Maybe print the GEN, KILL, IN, and OUT sets for each block as well?
+				System.out.println(" }");
+				System.out.println("\nGEN: { ");
+				for (IRInstruction g : bb.gen) {
+					System.out.print("\t");
+					blockPrinter.printInstruction(g);
+				}
+				System.out.println("}\n\nKILL: { ");
+				for (IRInstruction k : bb.kill) {
+					System.out.print("\t");
+					blockPrinter.printInstruction(k);
+				}
+				System.out.println("}\n\nIN: { ");
+				for (IRInstruction in : bb.in) {
+					System.out.print("\t");
+					blockPrinter.printInstruction(in);
+				}
+				System.out.println("}\n\nOUT: { ");
+				for (IRInstruction o : bb.out) {
+					System.out.print("\t");
+					blockPrinter.printInstruction(o);
+				}
+				System.out.print("}\n");
 			}
+			System.out.println("________________________________________");
 		}
 	}
 
@@ -538,6 +577,24 @@ public class ControlFlowGraph {
 		}
 		// return foundSingleEntry;
 		return occurrences == 1;
+	}
+
+	public List<CFGEdge> getEdgesFromBlock(BasicBlockBase bb) {
+		List<CFGEdge> adj = new ArrayList<>();
+		for (CFGEdge edge : this.edges) {
+			if (edge.start.equals(bb))
+				adj.add(edge);
+		}
+		return adj;
+	}
+
+	public List<CFGEdge> getEdgesToBlock(BasicBlockBase bb) {
+		List<CFGEdge> adj = new ArrayList<>();
+		for (CFGEdge edge : this.edges) {
+			if (edge.end.equals(bb))
+				adj.add(edge);
+		}
+		return adj;
 	}
 
 	public Set<CFGEdge> getEdges() {

@@ -151,5 +151,15 @@ public class DominatorTree {
 
 	public Set<TreeNode> getTreeNodes() { return this.treeNodes; }
 
-	
+	public void printTree() {
+		for (TreeNode node : this.treeNodes) {
+			System.out.println("[DominatorTree] NODE "+node.block.blocknum+":");
+			System.out.println("\tparent = "+ (node.parent != null ? node.parent.blocknum : "NULL"));
+			System.out.print("\tchildren = { ");
+			for (BasicBlockBase child : node.children) {
+				System.out.print(child.blocknum + ", ");
+			}
+			System.out.println("}\n");
+		}
+	}
 }

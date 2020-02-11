@@ -24,10 +24,10 @@ public abstract class BasicBlockBase implements Comparable<BasicBlockBase> {
 	public int size;
 	public int blocknum;
 
-	public Set<IRInstruction> gen;		// defs
-	public Set<IRInstruction> kill;
-	public Set<IRInstruction> in;
-	public Set<IRInstruction> out;
+	public Set<IRInstruction> gen;	// Set of definitions generated in block
+	public Set<IRInstruction> kill;	// Set of definitions killed in block
+	public Set<IRInstruction> in;	// Set of definitions that reach beginning of block
+	public Set<IRInstruction> out;	// Set of definitions that reach end of block
 
 	// Maps to associate each variable instructio operand with a set of all
 	// instructions in the block that define or use that operand, respectively
