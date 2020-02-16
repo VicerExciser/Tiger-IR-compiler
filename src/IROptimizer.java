@@ -32,7 +32,6 @@ public class IROptimizer {
     // the basic block classes, CFG classes, and IRUtil to verify our design
 
     // Removes dead code from a function in the program
-    // NOTE: Does not update the CFG or its Basic Blocks
     private static void sweep(IRFunction f, Set<IRInstruction> markedSet) {
         //  For each instruction i in function f, if i is not marked, then delete i
         Set<IRInstruction> removeSet = new HashSet<>();
@@ -44,17 +43,12 @@ public class IROptimizer {
         IRPrinter debugPrinter = new IRPrinter(System.out);
         // Dead code removal from function's instruction list
         for (IRInstruction i : removeSet) {
-            // System.out.println("=== REMOVING DEAD INSTRUCTION:\n\tFunction: "
-            //         + f.name + "\n\tLine: " + String.valueOf(i.irLineNumber)
-            //         + "\n\tOp: " + i.opCode.toString() + "\n===\n");
             System.out.print("=== REMOVING DEAD INSTRUCTION ===   [line "+ i.irLineNumber+"]:\t");
             debugPrinter.printInstruction(i);
             f.instructions.remove(i);
-            // System.out.println("Instruction removed: "+((MaxBasicBlock) i.belongsToBlock).removeInstruction(i));
+            ((MaxBasicBlock) i.belongsToBlock).removeInstruction(i);
         }
     }
-
-    // private static void mark(IRFunction f, )
 
     private static boolean worklistContains(Deque<IRInstruction> worklist, IRInstruction inst) {
         Iterator iterator = worklist.iterator(); 
@@ -83,15 +77,15 @@ public class IROptimizer {
         IRReader irReader = new IRReader();
         IRProgram program = irReader.parseIRFile(infile);
 
-        List<ControlFlowGraph> allCFGs = new ArrayList<>(program.functions.size());
+        // List<ControlFlowGraph> allCFGs = new ArrayList<>(program.functions.size());
         IRPrinter debugPrinter = new IRPrinter(System.out);
 
         // Remove all useless code (an operation is useless if no operation uses its result, or if all uses of the result are themselves dead)
         // Remove all unreachable code (an operation is unreachable if no valid control-flow path contains the operation)
         for (IRFunction function : program.functions) {
-            System.out.println("\n==--==--====--==--====--==--====--==--====--==--==");
-            System.out.println("==--==--====--==--====--==--====--==--====--==--==");
-            System.out.println(" FUNCTION \""+function.name+"\" ==--==--====--==--====--==--====--==--==\n");
+            System.out.println("\n ==--==--====--==--====--==--====--==--====--==--==");
+            System.out.println("==--====--==  FUNCTION { \""+function.name+"\" }  ==--====--==");
+            System.out.println(" ==--==--====--==--====--==--====--==--====--==--==\n");
             // Commence the 'Mark' routine to be followed with 'Sweep'
             // IRUtil.InstructionComparator instComparator = new IRUtil.InstructionComparator();
             // PriorityQueue<IRInstruction> worklist = new PriorityQueue<>(10, instComparator);
@@ -100,41 +94,11 @@ public class IROptimizer {
 
             ControlFlowGraph cfg = new ControlFlowGraph(function);
             cfg.build();
-            allCFGs.add(cfg);
+            // allCFGs.add(cfg);
 
             System.out.println("("+cfg.getBlocks().size()+" BASIC BLOCKS)");
 
-/*
-            //// NOTE: Best to analyze CFG from bottom-to-top (leaf-to-root) ////
-            Set<IRInstruction> removeSet = new LinkedHashSet<>();
-            // for (BasicBlockBase block : cfg.getBlocks()) {
-            BasicBlockBase cfgBlocks[] = cfg.getBlocks().toArray();
-            for (int idx = cfgBlocks.length; --idx >= 0;) {
-                BasicBlockBase block = cfgBlocks[idx];
-                MaxBasicBlock bb = (MaxBasicBlock) block;
-
-                List<CFGEdge> edgesToNode = cfg.getEdgesToBlock(block);     // NOTE: Can do the same thing using block's predecessors set
-                if (edgesToNode.isEmpty()) continue;
-                else if (edgesToNode.size() == 1) {
-                    // Only need to track down single chain of successors
-                    boolean redefBeforeUse = false;
-                    boolean defNeverUsed = true;
-
-                    BasicBlockBase fromNode = edgesToNode.get(0).start;
-                    MaxBasicBlock pp = (MaxBasicBlock) toNode;
-
-
-                }
-                else {
-                    for (CFGEdge edge : edgesToNode) {
-                        BasicBlockBase fromNode = edge.start;
-
-                    }
-                }
-            }
-*/
-
-            /**     Variable operands and their defs & uses
+            /**     Variable operands and their defs & uses (for example.ir)
             ================================================
             "r":    Defs = { [B0] : "assign, r, 1", 
                              [B1] : "assign, r, n", 
@@ -227,31 +191,19 @@ public class IROptimizer {
                     System.out.println();
                 }
 
-                // BasicBlockBase iBlock = i.belongsToBlock;
-                // if (iBlock == null) {
-                //     System.out.println("[IROptimizer::Mark] iBlock found null");
-                //     i = worklist.poll();
-                //     break;
-                // }
                 MaxBasicBlock iBlock = (MaxBasicBlock) i.belongsToBlock;
+                if (iBlock == null) {
+                //     System.out.println("[IROptimizer::Mark] iBlock found null");
+                    i = worklist.poll();
+                    break;
+                }
 
                 // (i has form "x <-- op y" or "x <-- y op z")
-                // if (IRUtil.isDefinition(i)) {
                 if (IRUtil.isXUse(i)) {
-                    // System.out.print("(is use)\t");
                     // For each instruction j that contains a def of y or z that reaches i...
-                    // for (IRInstruction j : cfg.getUniversalDefinitions()) {
-                    // for (BasicBlockBase p : iBlock.predecessors) {
-                    // for (IRInstruction j : ((MaxBasicBlock)p).instructions) {
-
-                        // Checking generated definitions of predecessors
-                        // for (IRInstruction j : p.gen) {
-                        // for (IRInstruction j : p.out) {
                     Set<IRInstruction> checkSet = new HashSet<>(iBlock.in);
                     checkSet.addAll(iBlock.instructions);
-                    // for (IRInstruction j : iBlock.in) {
                     for (IRInstruction j : checkSet) {
-                    // for (IRInstruction j : function.instructions) {
                         if (IRUtil.isDefinition(j)) {
                             if (j.equals(i)) continue;      // Should exclude self...right?
 
@@ -259,16 +211,9 @@ public class IROptimizer {
                             IRVariableOperand lhs = (IRVariableOperand) j.operands[0];
                             boolean isReachingDefinition = false;
 
-                            // System.out.print("i:\t");
-                            // debugPrinter.printInstruction(i);
-                            // System.out.println("i.sourceOperands = "+IRUtil.getSourceOperands(i)+"\n");
-
                             for (IRVariableOperand rhs : IRUtil.getSourceOperands(i)) {
                                 if (lhs.getName().equals(rhs.getName())) {
                                     //// FOR DEBUG
-                                    // System.out.print("[IROptimizer::Mark] Match found: LHS=\""+lhs.getName()+"\"  RHS=\""+rhs.getName()+"\"\n");
-                                    // System.out.print("j:\t");
-                                    // debugPrinter.printInstruction(j);
                                     if (VERBOSE_REACHING_DEFS) {
                                         System.out.print(">>  j ("+j.belongsToBlock+", line "+j.irLineNumber+"):\t");
                                         debugPrinter.printInstruction(j);
@@ -277,26 +222,13 @@ public class IROptimizer {
                                     //// FOR DEBUG
 
                                     if (isReachingDef(i, j, function)) {
-                                        if (VERBOSE_REACHING_DEFS) {
-                                            System.out.println("[IROptimizer::Mark] Instruction 'i' is reached by def 'j'");
-                                            // System.out.print(i.belongsToBlock+" (line "+i.irLineNumber+")\ti:\t");
-                                            // debugPrinter.printInstruction(i);
-                                            // System.out.print(j.belongsToBlock+" (line "+j.irLineNumber+")\tj:\t");
-                                            // debugPrinter.printInstruction(j);
-                                            System.out.println();
-                                        }
+                                        if (VERBOSE_REACHING_DEFS)
+                                            System.out.println("[IROptimizer::Mark] Instruction 'i' is reached by def 'j'\n");
                                         isReachingDefinition = true;
                                         break;
                                     } 
-                                    else {
-                                        if (VERBOSE_REACHING_DEFS)
-                                            System.out.println("[IROptimizer::Mark] Instruction 'i' is NOT reached by def 'j'\n");
-                                    //     System.out.print(i.belongsToBlock+"\ti:\t");
-                                    //     debugPrinter.printInstruction(i);
-                                    //     System.out.print(j.belongsToBlock+"\tj:\t");
-                                    //     debugPrinter.printInstruction(j);
-                                    //     System.out.println();
-                                    }
+                                    else if (VERBOSE_REACHING_DEFS)
+                                        System.out.println("[IROptimizer::Mark] Instruction 'i' is NOT reached by def 'j'\n");
                                 }
                                 
                             }
@@ -314,7 +246,6 @@ public class IROptimizer {
                             }
                         }
                     }
-                // }
                 }
                 if (worklist.isEmpty()) break;
                 i = worklist.poll();
@@ -324,28 +255,7 @@ public class IROptimizer {
 
             sweep(function, marked);
             
-/*
-            System.out.println("FUNCTION "+function.name+" ("+cfg.getBlocks().size()+" BASIC BLOCKS)\n");
-            for (IRInstruction inst : function.instructions) {
-                if (inst.isLeader) {
-                    System.out.println("LEADER: line #"+inst.irLineNumber);
-                }
-            }
             System.out.println();
-            // for (BasicBlockBase block : cfg.getBlocks()) {
-            System.out.println("CFG EDGES:");
-            for (CFGEdge edge : cfg.getEdges()) {
-                // System.out.println("\t"+cfg.getBlockIndex(edge.start)+" --> "+cfg.getBlockIndex(edge.end));
-                System.out.println("\t"+edge.start.blocknum+" --> "+edge.end.blocknum+"\t( "+edge.start.id+" --> "+edge.end.id+" )");
-            }
-            System.out.println();
-
-            System.out.println("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
-            cfg.printAllBasicBlocks();
-            System.out.println("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
-*/
-
-        System.out.println();
         }
 
         // Print the IR to another file

@@ -108,13 +108,14 @@ public class IRUtil {
 		return isCritical(block.s);
 	}
 	
-	
+	// Any instruction type that might have variable type source (RHS) operands
 	public static boolean isXUse(IRInstruction inst) {
 	    return inst.opCode == IRInstruction.OpCode.RETURN
 	    		|| inst.opCode == IRInstruction.OpCode.ASSIGN 
 	    		|| inst.opCode == IRInstruction.OpCode.CALL 
 	    		|| inst.opCode == IRInstruction.OpCode.CALLR 
 	    		|| inst.opCode == IRInstruction.OpCode.ARRAY_STORE
+	    		|| inst.opCode == IRInstruction.OpCode.ARRAY_LOAD
 	    		|| isBinaryOp(inst) || isConditionalBranch(inst);
 	    // if(isArrayAssignment(inst)) {
 	    //     return true;
@@ -278,6 +279,9 @@ public class IRUtil {
 				// (array assignments not considered as they do not generate definitions)
 				if (inst.operands[1] instanceof IRVariableOperand)
 					sources.add((IRVariableOperand)inst.operands[1]);
+			} else if (inst.opCode == IRInstruction.OpCode.ARRAY_LOAD) {	// op, x, array_name, offset
+				if (inst.operands[2] instanceof IRVariableOperand)
+					sources.add((IRVariableOperand)inst.operands[2]);
 			}
 		} else if (isArrayAssignment(inst)) {    // op, x, size, value
 			if (inst.operands[len-1] instanceof IRVariableOperand)
@@ -285,6 +289,8 @@ public class IRUtil {
 		} else if (inst.opCode == IRInstruction.OpCode.ARRAY_STORE) {    // op, x, array_name, offset
 			if (inst.operands[0] instanceof IRVariableOperand)
 				sources.add((IRVariableOperand)inst.operands[0]);
+			if (inst.operands[2] instanceof IRVariableOperand)
+				sources.add((IRVariableOperand)inst.operands[2]);
 		} else if (isConditionalBranch(inst)) {    // op, label, y, z
 			for (i = 1; i < len; i++)
 				if (inst.operands[i] instanceof IRVariableOperand)

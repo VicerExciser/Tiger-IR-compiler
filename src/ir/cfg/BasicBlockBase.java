@@ -32,14 +32,12 @@ public abstract class BasicBlockBase implements Comparable<BasicBlockBase> {
 
 	// Maps to associate each variable instructio operand with a set of all
 	// instructions in the block that define or use that operand, respectively
-//	public Map<IRVariableOperand, Set<IRInstructnion>> operandDefs;
-//	public Map<IRVariableOperand, Set<IRInstruction>> operandUses;
 	public Map<String, Set<IRInstruction>> operandDefs;
 	public Map<String, Set<IRInstruction>> operandUses;
 
 	// The following sets are populated when the CFG is constructed
 	public Set<BasicBlockBase> predecessors;
-	public Set<BasicBlockBase> successors;
+//	public Set<BasicBlockBase> successors;
 
 	// REMINDER: All blocks in dom(Bn) exist on every possible path
 	// 			 from B0 to Bn
@@ -69,10 +67,8 @@ public abstract class BasicBlockBase implements Comparable<BasicBlockBase> {
 		this.operandDefs = new HashMap<>();
 		this.operandUses = new HashMap<>();
 
-		// this.predecessors = new LinkedHashSet<>();
-		// this.successors = new LinkedHashSet<>();
 		this.predecessors = new TreeSet<>();
-		this.successors = new TreeSet<>();
+		// this.successors = new TreeSet<>();
 
 		this.dom  = new LinkedHashSet<>();
 		// this.dom.add(this);
