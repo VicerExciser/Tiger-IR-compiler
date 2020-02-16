@@ -31,6 +31,7 @@ public class DominatorTree {
 			this.block = block;
 			this.parent = parent;
 			this.children = children;
+			this.block.iDom = parent;
 		}
 
 		public TreeNode(BasicBlockBase block, BasicBlockBase parent) {

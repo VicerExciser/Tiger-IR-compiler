@@ -15,8 +15,15 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Deque;
+import java.util.LinkedList;
+import java.util.Iterator;
 
 public class IROptimizer {
+
+    private static String PROJECT_ROOT_DIR = "/Users/acondict/Documents/MSCS/cs4240/Tiger-IR-compiler/";
+    private static String TEST_IN_FILEPATH = PROJECT_ROOT_DIR + "public_test_cases/sqrt/sqrt.ir";   //"example/example.ir";
+    private static String TEST_OUT_FILEPATH = PROJECT_ROOT_DIR + "out.ir";
 
     ////  TODO  ////
     // Still need to throw some IRExceptions at potential failure points in
@@ -47,10 +54,32 @@ public class IROptimizer {
 
     // private static void mark(IRFunction f, )
 
+    private static boolean worklistContains(Deque<IRInstruction> worklist, IRInstruction inst) {
+        Iterator iterator = worklist.iterator(); 
+        while (iterator.hasNext()) {
+            if (inst.equals(iterator.next()))
+                return true;
+        }
+        return false;
+    }
+
+    private static void printWorklist(Deque<IRInstruction> worklist) {
+        IRPrinter debugPrinter = new IRPrinter(System.out);
+        Iterator iterator = worklist.iterator(); 
+        System.out.println("Worklist = {");
+        while (iterator.hasNext()) {
+            System.out.print("\t");
+            debugPrinter.printInstruction((IRInstruction)iterator.next());
+        }
+        System.out.println("}\n");
+    }
+
     public static void main(String[] args) throws Exception {
         // Parse the IR file
+        String infile = args.length > 0 ? args[0] : TEST_IN_FILEPATH;
+        String outfile = args.length > 1 ? args[1] : TEST_OUT_FILEPATH;
         IRReader irReader = new IRReader();
-        IRProgram program = irReader.parseIRFile(args[0]);
+        IRProgram program = irReader.parseIRFile(infile);
 
         List<ControlFlowGraph> allCFGs = new ArrayList<>(program.functions.size());
         IRPrinter debugPrinter = new IRPrinter(System.out);
@@ -59,8 +88,9 @@ public class IROptimizer {
         // Remove all unreachable code (an operation is unreachable if no valid control-flow path contains the operation)
         for (IRFunction function : program.functions) {
             // Commence the 'Mark' routine to be followed with 'Sweep'
-            IRUtil.InstructionComparator instComparator = new IRUtil.InstructionComparator();
-            PriorityQueue<IRInstruction> worklist = new PriorityQueue<>(10, instComparator);
+            // IRUtil.InstructionComparator instComparator = new IRUtil.InstructionComparator();
+            // PriorityQueue<IRInstruction> worklist = new PriorityQueue<>(10, instComparator);
+            Deque<IRInstruction> worklist = new LinkedList<>();
             Set<IRInstruction> marked = new HashSet<>();
 
             ControlFlowGraph cfg = new ControlFlowGraph(function);
@@ -163,73 +193,134 @@ public class IROptimizer {
                 }
             }
             System.out.println("\n");
+
+            System.out.print("Conditional branch targets: {");
+            // System.out.println();
+            // for (IRInstruction inst : function.instructions) {
+            //     if (inst.isCondBranchTarget) {
+            //         System.out.print("\t");
+            //         debugPrinter.printInstruction(inst);
+            //     }
+            // }
+            for (BasicBlockBase block : cfg.getBlocks()) {
+                if (((MaxBasicBlock)block).reachedByConditionalBranch())
+                    System.out.print(" B"+block.blocknum+",");
+            }
+            System.out.println("}");
+
+            System.out.println("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
+            cfg.printAllBasicBlocks();
+            System.out.println("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
+/*
+            System.out.println("CFG EDGES:");
+            for (CFGEdge edge : cfg.getEdges()) {
+                System.out.println("\t{ "+edge.start + " --> "+edge.end+" }");
+            }
+            System.out.println("\n");
+
+            BasicBlockBase exitNode = cfg.getEntryNode();
+            int highestBNum = BasicBlockBase.BLOCKNUM-1;
+            for (BasicBlockBase b : cfg.getBlocks()) {
+                if (b.blocknum == highestBNum) {
+                    exitNode = b;
+                    break;
+                }
+            }
+            for (BasicBlockBase b : cfg.getBlocks())
+                cfg.printAllPaths(cfg.getEntryNode(), b);
+            System.out.println("\n");
             //// FOR DEBUG ////
 
+            cfg.generateDominatorTree();  // Now that all paths from root have been computed for each block!
+*/
 
             // Commence the 'Mark' routine to be followed with 'Sweep'
             for (IRInstruction instruction : function.instructions) {
                 // Mark all critical instructions and add to the worklist
                 if (IRUtil.isCritical(instruction)) {
                     marked.add(instruction);
-                    worklist.add(instruction);
+                    if (!worklistContains(worklist, instruction))
+                        worklist.add(instruction);
                 }
             }
 
             IRInstruction i = worklist.poll();
             while (i != null) {
                 BasicBlockBase iBlock = i.belongsToBlock;
+                if (iBlock == null) {
+                    System.out.println("[IROptimizer-worklistMark] iBlock found null");
+                    i = worklist.poll();
+                    // continue;
+                    break;
+                }
                 IRInstruction insts[] = (((MaxBasicBlock) iBlock).instructions.toArray(new IRInstruction[iBlock.size]));
                 // if (IRUtil.isXUse(i)) {
                 Set<IRVariableOperand> sourceOperands = IRUtil.getSourceOperands(i);
-                for (IRVariableOperand src : sourceOperands) {
-                    // Scanning all instructions that define any source variable operands used by 'i'
-                    for (IRInstruction inst : globalDefMap.get(src.getName())) {
-                        if (inst.belongsToBlock.equals(iBlock)) continue;
-                        boolean definitionReaches = true;
+                if (!sourceOperands.isEmpty()) {
+                    for (IRVariableOperand src : sourceOperands) {
+                        if (src == null) continue;
+                        try {
+                            // Scanning all instructions that define any source variable operands used by 'i'
+                            for (IRInstruction inst : globalDefMap.get(src.getName())) {
+                                if (inst == null)
+                                    continue;
+//                                    break;
+                                if (inst.belongsToBlock.equals(iBlock) || i.equals(inst))
+                                    continue;
+//                                    break;
+                                boolean definitionReaches = true;
 
-                        // A def reaches instruction i if it is in the IN set for block B(i)
-                        // Must also ensure that the def is not killed locally within B(i) before instruction i
-                        if (iBlock.in.contains(inst)) {
-                            for (int idx = 0; idx < Arrays.asList(insts).indexOf(i); idx++) {  //iBlock.size; idx++) {
-                                if (insts[idx].equals(i)) break;                        // Only scan thru block up to instruction i
+                                // A def reaches instruction i if it is in the IN set for block B(i)
+                                // Must also ensure that the def is not killed locally within B(i) before instruction i
+                                if (iBlock.in.contains(inst)) {
+                                    for (int idx = 0; idx < Arrays.asList(insts).indexOf(i); idx++) {  //iBlock.size; idx++) {
+                                        if (insts[idx].equals(i)) break;                        // Only scan thru block up to instruction i
 
-                                if (iBlock.operandDefs.containsKey(src) && iBlock.operandDefs.get(src).contains(insts[idx])) {
-                                    definitionReaches = false;
+                                        if (iBlock.operandDefs.containsKey(src) 
+                                                && iBlock.operandDefs.get(src).contains(insts[idx]))
+                                            definitionReaches = false;
+
+                                        if (iBlock.operandUses.containsKey(src) && iBlock.operandUses.get(src).contains(insts[idx])) 
+                                        {     // Could search here for unused and/or unreachable code
+                                            
+                                        }
+                                    }
+
+                                    /*
+                                    for (IRInstruction g : iBlock.gen) {
+                                        if (((IRVariableOperand) g.operands[0]).getName().equals(src.getName())) {
+                                            if (g.irLineNumber < i.irLineNumber)
+                                                definitionReaches = false;
+                                        }
+                                    }
+                                    */
+                                } 
+                                // else definitionReaches = false;
+                       
+
+
+                                if (definitionReaches) {
+                                    // System.out.print("$$$\tInstruction marked for sweep:\t");
+                                    // debugPrinter.printInstruction(inst);
+
+                                    if (!marked.contains(inst)) marked.add(inst);
+                                    if (!worklistContains(worklist, inst)) worklist.add(inst);
                                 }
-
-                                if (iBlock.operandUses.containsKey(src) && iBlock.operandUses.get(src).contains(insts[idx])) 
-                                {     // Could search here for unused and/or unreachable code
-                                    
+                                else {
+                                    // System.out.print("XXX\tDefinition determined non-reaching:\t");
+                                    // debugPrinter.printInstruction(inst);
                                 }
+                                // System.out.print("--->\ti:\t");
+                                // debugPrinter.printInstruction(i);
+                                // System.out.println();
+                                // printWorklist(worklist);
                             }
-
-                            /*
-                            for (IRInstruction g : iBlock.gen) {
-                                if (((IRVariableOperand) g.operands[0]).getName().equals(src.getName())) {
-                                    if (g.irLineNumber < i.irLineNumber)
-                                        definitionReaches = false;
-                                }
-                            }
-                            */
-                        } 
-                        // else definitionReaches = false;
-
-
-
-                        if (definitionReaches) {
-                            System.out.print("$$$\tInstruction marked for sweep:\t");
-                            debugPrinter.printInstruction(inst);
-
-                            if (!marked.contains(inst)) marked.add(inst);
-                            if (!worklist.contains(inst)) worklist.add(inst);
+                        } catch (NullPointerException npe) {
+//                            continue;
+                            System.out.println("[IROptimizer-worklistMark] NullPointerException caught");
+                            break;
                         }
-                        else {
-                            System.out.print("XXX\tDefinition determined non-reaching:\t");
-                            debugPrinter.printInstruction(inst);
-                        }
-                        System.out.print("--->\ti:\t");
-                        debugPrinter.printInstruction(i);
-                        System.out.println();
+
                     }
                 }
 
@@ -576,7 +667,8 @@ within B(i) before instruction i
 
 
         // Print the IR to another file
-        IRPrinter filePrinter = new IRPrinter(new PrintStream(args[1]));
+
+        IRPrinter filePrinter = new IRPrinter(new PrintStream(outfile));
         filePrinter.printProgram(program);
 
     }

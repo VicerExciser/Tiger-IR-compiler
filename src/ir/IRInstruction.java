@@ -28,6 +28,7 @@ public class IRInstruction {
     public int irLineNumber;
 
     public boolean isLeader;
+    public boolean isCondBranchTarget;
     public BasicBlockBase belongsToBlock;
 
     public IRInstruction() {}
@@ -38,6 +39,7 @@ public class IRInstruction {
         this.irLineNumber = irLineNumber;
         this.belongsToBlock = null;
         this.isLeader = false;
+        this.isCondBranchTarget = false;
     }
 
 }

@@ -34,7 +34,11 @@ public class MaxBasicBlock extends BasicBlockBase {
 		while (i < instructions.size() && instructions.get(i).opCode == IRInstruction.OpCode.LABEL) {
 			this.topLabel = instructions.get(i);
 			this.leader = instructions.get(i++);
+//			if (i+1 < instructions.size())
+//				this.leader = instructions.get(++i);
 		}
+		if (i < instructions.size() && instructions.get(i).opCode != IRInstruction.OpCode.LABEL)
+			this.leader = instructions.get(i);
 
 		// We want to keep the instructions ordered, yet ensure no duplicates can exist:
 		this.instructions = new LinkedHashSet<>(instructions);
@@ -46,12 +50,22 @@ public class MaxBasicBlock extends BasicBlockBase {
 	public boolean beginsWithLabel() {
 		return this.topLabel != null;
 	}
+
+	public boolean reachedByConditionalBranch() {
+		for (IRInstruction inst : this.instructions) {
+			if (inst.isCondBranchTarget)
+				return true;
+		}
+		return false;
+	}
 	
 	// Return true if successful, else false if current terminator is a control 
 	// flow statement or if it already exists in this block ('.add()' will fail)
 	public boolean appendInstruction(IRInstruction inst) {
 		if (IRUtil.isControlFlow(this.terminator) || !this.instructions.add(inst))
 			return false;
+		if (this.leader.opCode == IRInstruction.OpCode.LABEL)
+			this.leader = inst;
 		this.size = this.instructions.size();
 		this.terminator = inst;
 		inst.belongsToBlock = (BasicBlockBase)this;

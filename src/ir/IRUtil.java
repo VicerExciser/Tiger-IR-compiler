@@ -168,7 +168,13 @@ public class IRUtil {
 	}
 
     public static void identifyLeaders(IRFunction f) {
+		boolean nextIsLeader = false;
+		boolean nextIsBrTarget = false;
+		// boolean isLabel = false;
+		// boolean isBranch = false;
     	for (int i = 0; i < f.instructions.size(); i++) {
+    		boolean isLabel = f.instructions.get(i).opCode == IRInstruction.OpCode.LABEL;
+    		boolean isBranch = isConditionalBranch(f.instructions.get(i));
     		/*	Leaders (first instruction of a basic block) satisfy at least one of the following:
 				1. the first instruction in the procedure/function
 				2. the target of a 'goto' or 'branch' instruction (i.e., OpCode is LABEL)
@@ -176,20 +182,35 @@ public class IRUtil {
 			*/
 			if (i == 0)
 				f.instructions.get(i).isLeader = true;
+			else if (nextIsLeader) {
+				// if (!isLabel)
+					f.instructions.get(i).isLeader = true;	// WHAT ARE CONSEQUENCES OF COUNTING LABELS AS LEADERS???
+				nextIsLeader = (isLabel || isBranch);
+				// if (isBranch) 
+				// 	nextIsBrTarget = true;
+
+			}
 			// Mark the instruction immediately AFTER a label or branch operation as a leader 
-			// and bump i to skip over its index
-			else if ((i < f.instructions.size()-1) 		// Bounds check to make sure [i+1] is in range
-					&& (f.instructions.get(i).opCode == IRInstruction.OpCode.LABEL
-					|| isConditionalBranch(f.instructions.get(i))))
-//					||	f.instructions.get(i).opCode == IRInstruction.OpCode.BREQ
-//        			||  f.instructions.get(i).opCode == IRInstruction.OpCode.BRNEQ
-//        			||  f.instructions.get(i).opCode == IRInstruction.OpCode.BRLT
-//        			||  f.instructions.get(i).opCode == IRInstruction.OpCode.BRGT
-//        			||  f.instructions.get(i).opCode == IRInstruction.OpCode.BRLEQ
-//        			||  f.instructions.get(i).opCode == IRInstruction.OpCode.BRGEQ))
-				f.instructions.get(++i).isLeader = true;
+			else if (isLabel || isBranch) {
+				if (isLabel)
+					f.instructions.get(i).isLeader = true;	// WHAT ARE CONSEQUENCES OF COUNTING LABELS AS LEADERS???
+				// if (isBranch)
+				// 	nextIsBrTarget = true;
+				nextIsLeader = true;
+			}
 			else
 				f.instructions.get(i).isLeader = false;
+
+			if (nextIsBrTarget)
+				f.instructions.get(i).isCondBranchTarget = true;
+
+			if (isBranch) {
+				IRInstruction target = getLabelTarget(f, (IRLabelOperand)f.instructions.get(i).operands[0]);
+				if (target != null)
+					target.isCondBranchTarget = true;
+				nextIsBrTarget = true;
+			} else
+				nextIsBrTarget = false;
     	}
     }
 

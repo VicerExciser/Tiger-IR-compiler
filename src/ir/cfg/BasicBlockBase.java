@@ -4,6 +4,7 @@ import ir.IRFunction;
 import ir.IRInstruction;
 import ir.cfg.ControlFlowGraph;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -43,7 +44,9 @@ public abstract class BasicBlockBase implements Comparable<BasicBlockBase> {
 	public Set<BasicBlockBase> dom;
 	public BasicBlockBase iDom;		// Immediate dominator block
 
-	static int BLOCKNUM = 0;
+	public List<List<BasicBlockBase>> pathsFromRoot;
+
+	public static int BLOCKNUM = 0;
 
 	public BasicBlockBase(IRFunction parent, int size,
 			IRInstruction leader, IRInstruction terminator) {
@@ -72,6 +75,8 @@ public abstract class BasicBlockBase implements Comparable<BasicBlockBase> {
 		this.dom  = new LinkedHashSet<>();
 		// this.dom.add(this);
 		this.iDom = null;
+
+		this.pathsFromRoot = new ArrayList<>();
 		
 		this.blocknum = BLOCKNUM;
 		BLOCKNUM += 1;
@@ -88,7 +93,8 @@ public abstract class BasicBlockBase implements Comparable<BasicBlockBase> {
 
 	@Override
 	public String toString() {
-		return id;
+		// return id;
+		return "B"+this.blocknum;
 	}
 
 	@Override 
