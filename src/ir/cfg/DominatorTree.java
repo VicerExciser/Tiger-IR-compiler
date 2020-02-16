@@ -154,11 +154,11 @@ public class DominatorTree {
 
 	public void printTree() {
 		for (TreeNode node : this.treeNodes) {
-			System.out.println("[DominatorTree] NODE "+node.block.blocknum+":");
-			System.out.println("\tparent = "+ (node.parent != null ? node.parent.blocknum : "NULL"));
+			System.out.println("[DominatorTree] NODE "+node.block+":");
+			System.out.println("\tparent = "+ (node.parent != null ? node.parent : "NULL"));
 			System.out.print("\tchildren = { ");
 			for (BasicBlockBase child : node.children) {
-				System.out.print(child.blocknum + ", ");
+				System.out.print(child + ", ");
 			}
 			System.out.println("}\n");
 		}

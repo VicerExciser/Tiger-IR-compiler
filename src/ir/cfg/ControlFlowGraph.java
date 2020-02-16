@@ -67,17 +67,17 @@ public class ControlFlowGraph {
 			// Add a fresh vertex (basic block) to the graph for each leader instruction
 			IRUtil.identifyLeaders(this.f);
 
-			for (IRInstruction i : this.f.instructions) {
-				//// FOR DEBUG
-				String msg = "[CFG.build] Instruction i ";
-				if (i.isLeader)
-					msg += "is Leader:\t";
-				else
-					msg += "is NOT Leader:\t";
-				System.out.print(msg);
-				debugPrinter.printInstruction(i);
-				//// FOR DEBUG
-			}
+			//// FOR DEBUG
+			// for (IRInstruction i : this.f.instructions) {
+			// 	String msg = "[CFG.build] Instruction i ";
+			// 	if (i.isLeader)
+			// 		msg += "is Leader:\t";
+			// 	else
+			// 		msg += "is NOT Leader:\t";
+			// 	System.out.print(msg);
+			// 	debugPrinter.printInstruction(i);
+			// }
+			//// FOR DEBUG
 
 			generateInitialBlocks(this.f.instructions);
 
@@ -89,8 +89,8 @@ public class ControlFlowGraph {
 			// Need to construct the basic blocks for each leader in this function first
 			for (IRInstruction i : this.f.instructions) {
 				//// FOR DEBUG
-				System.out.print("[CFG.build] i:\t");
-				debugPrinter.printInstruction(i);
+				// System.out.print("[CFG.build] i:\t");
+				// debugPrinter.printInstruction(i);
 				BasicBlockBase a, b;
 				//// FOR DEBUG
 
@@ -137,8 +137,8 @@ public class ControlFlowGraph {
 
 							if (addEdge(curr, i.belongsToBlock)) {
 								//// FOR DEBUG
-								System.out.print("[CFG.build].P0. Adding edge to i from:\t");
-								debugPrinter.printInstruction(currInst);
+								// System.out.print("[CFG.build].P0. Adding edge to i from:\t");
+								// debugPrinter.printInstruction(currInst);
 								//// FOR DEBUG
 							}
 						}
@@ -167,8 +167,8 @@ public class ControlFlowGraph {
 
 					if (addEdge(curr, t.belongsToBlock)) {
 						//// FOR DEBUG
-						System.out.print("[CFG.build].P1. Adding edge from i --> t:\t");
-						debugPrinter.printInstruction(t);
+						// System.out.print("[CFG.build].P1. Adding edge from i --> t:\t");
+						// debugPrinter.printInstruction(t);
 						//// FOR DEBUG
 					}
 					// if (i.belongsToBlock != null)
@@ -191,8 +191,8 @@ public class ControlFlowGraph {
 
 						if (addEdge(curr, next.belongsToBlock)) {
 							//// FOR DEBUG
-							System.out.print("[CFG.build].P2. Adding edge from i --> next:\t");
-							debugPrinter.printInstruction(next);
+							// System.out.print("[CFG.build].P2. Adding edge from i --> next:\t");
+							// debugPrinter.printInstruction(next);
 							//// FOR DEBUG
 						}
 					}
@@ -211,8 +211,8 @@ public class ControlFlowGraph {
 
 						if (addEdge(curr, t.belongsToBlock)) {
 							//// FOR DEBUG
-							System.out.print("[CFG.build].P3. Adding edge from i --> t:\t");
-							debugPrinter.printInstruction(t);
+							// System.out.print("[CFG.build].P3. Adding edge from i --> t:\t");
+							// debugPrinter.printInstruction(t);
 							//// FOR DEBUG
 						}
 					}
@@ -220,7 +220,9 @@ public class ControlFlowGraph {
 				else if (i.opCode != IRInstruction.OpCode.LABEL)
 					((MaxBasicBlock)curr).appendInstruction(i);
 
-				System.out.println();
+				//// FOR DEBUG
+				// System.out.println();
+				//// FOR DEBUG
 			}
 		}
 		else {
@@ -268,8 +270,8 @@ public class ControlFlowGraph {
 
 			            if (addEdge(i.belongsToBlock, t.belongsToBlock)) { // i+1
 							//// FOR DEBUG
-							System.out.print("[CFG.build].P4. Added edge from i --> t:\t");
-							debugPrinter.printInstruction(t);
+							// System.out.print("[CFG.build].P4. Added edge from i --> t:\t");
+							// debugPrinter.printInstruction(t);
 							//// FOR DEBUG
 						}
 			        }
@@ -312,17 +314,27 @@ public class ControlFlowGraph {
 */
 
 		// Update successors and predecessors for all basic blocks
-		System.out.println("[CFG.build] Updating successors & predecessors for all basic blocks");
+		System.out.print("[CFG.build] Updating successors & predecessors for all basic blocks...");
 		for (CFGEdge edge : this.edges) {
 			edge.start.successors.addAll(edge.end.successors);
 			edge.end.predecessors.addAll(edge.start.predecessors);
 		}
-
-		System.out.println("[CFG.build] Generating reaching def sets for all basic blocks");
+		System.out.println("  Done.");
+		System.out.print("[CFG.build] Generating reaching def sets for all basic blocks...");
 		generateReachingDefSets();
-		System.out.println("[CFG.build] Generating dominator tree for all basic blocks");
+		System.out.println("  Done.");
+		System.out.print("[CFG.build] Generating dominator tree for all basic blocks...");
 		generateDominatorTree();
-		System.out.println("[CFG.build] FINISHED.");
+		System.out.println("  Done.\n");
+		// FOR DEBUG
+		this.domTree.printTree();
+		for (BasicBlockBase b : this.blocks) {
+			if (b.predecessors.contains(b))
+				b.predecessors.remove(b);
+			if (b.successors.contains(b))
+				b.successors.remove(b);
+		}
+		System.out.println("\n[CFG.build] FINISHED.");
 	}
 
 	/**	Dominance:
@@ -461,12 +473,6 @@ public class ControlFlowGraph {
 	• An iterative fixed-point algorithm will solve them quickly 
 	**/
 	public void generateDominatorTree() {
-		System.out.println("\nCFG EDGES:");
-		for (CFGEdge edge : this.edges) {
-			System.out.println("\t{ "+edge.start + " --> "+edge.end+" }");
-		}
-		System.out.println();
-
 		BasicBlockBase exitNode = this.entryNode;
 		int highestBNum = BasicBlockBase.BLOCKNUM-1;
 		for (BasicBlockBase b : this.blocks) {
@@ -474,12 +480,12 @@ public class ControlFlowGraph {
 				exitNode = b;
 		}
 
-		// printAllPaths(this.entryNode, exitNode);
+		// computeAllPaths(this.entryNode, exitNode);
 		// for (BasicBlockBase b : this.blocks) {
-		// 	printAllPaths(b, exitNode);
+		// 	computeAllPaths(b, exitNode);
 		// }
 		for (BasicBlockBase b : this.blocks) {
-			printAllPaths(this.entryNode, b);
+			computeAllPaths(this.entryNode, b);
 		}
 /*
 		// Initialize dom(n0) = {n0} and dom(ni) = {universal set}
@@ -580,36 +586,13 @@ public class ControlFlowGraph {
 			this.domTree.add(retry);
 
 
-		// FOR DEBUG
-		this.domTree.printTree();
-
-/*
-		System.out.println("\nCFG EDGES:");
-		for (CFGEdge edge : this.edges) {
-			System.out.println("\t{ "+edge.start + " --> "+edge.end+" }");
-		}
-		System.out.println();
-
-		BasicBlockBase exitNode = this.entryNode;
-		int highestBNum = BasicBlockBase.BLOCKNUM-1;
-		for (BasicBlockBase b : this.blocks) {
-			if (b.blocknum == highestBNum)
-				exitNode = b;
-		}
-
-		// printAllPaths(this.entryNode, exitNode);
-		// for (BasicBlockBase b : this.blocks) {
-		// 	printAllPaths(b, exitNode);
-		// }
-		for (BasicBlockBase b : this.blocks) {
-			printAllPaths(this.entryNode, b);
-		}
-*/
+		// // FOR DEBUG
+		// this.domTree.printTree();
 	}
 
-	// Prints all paths from 's' to 'd' 
-    public void printAllPaths(BasicBlockBase s, BasicBlockBase d) { 
-    	System.out.println("ALL PATHS FROM "+s+" TO "+d+":");
+	// Computes all paths from srouce node 's' to destination node 'd' 
+    public void computeAllPaths(BasicBlockBase s, BasicBlockBase d) { 
+    	// System.out.println("ALL PATHS FROM "+s+" TO "+d+":");
         boolean[] isVisited = new boolean[this.blocks.size()]; 
         List<BasicBlockBase> pathList = new ArrayList<>(); 
           
@@ -617,8 +600,8 @@ public class ControlFlowGraph {
         pathList.add(s); 
           
         //Call recursive utility 
-        printAllPathsUtil(s, d, isVisited, pathList);
-        System.out.println();
+        computeAllPathsUtil(s, d, isVisited, pathList);
+        // System.out.println();
     } 
   
     // A recursive function to print 
@@ -627,14 +610,13 @@ public class ControlFlowGraph {
     // vertices in current path. 
     // localPathList<> stores actual 
     // vertices in the current path 
-    private void printAllPathsUtil(BasicBlockBase u, BasicBlockBase d, 
+    private void computeAllPathsUtil(BasicBlockBase u, BasicBlockBase d, 
 			boolean[] isVisited, List<BasicBlockBase> localPathList) { 
         // Mark the current node 
         isVisited[u.blocknum%isVisited.length] = true; 
           
-        if (u.equals(d))  
-        { 
-            System.out.println("\t"+localPathList);
+        if (u.equals(d)) { 
+            // System.out.println("\t"+localPathList);
             d.pathsFromRoot.add(new ArrayList<BasicBlockBase>(localPathList));
             // if match found then no need to traverse more till depth 
             isVisited[u.blocknum%isVisited.length]= false; 
@@ -652,8 +634,7 @@ public class ControlFlowGraph {
 	                // store current node  
 	                // in path[] 
 	                localPathList.add(i); 
-	                printAllPathsUtil(i, d, isVisited, localPathList); 
-	                // d.pathsFromRoot.add(localPathList);
+	                computeAllPathsUtil(i, d, isVisited, localPathList); 
 	                  
 	                // remove current node 
 	                // in path[] 
@@ -671,16 +652,12 @@ public class ControlFlowGraph {
 		IRPrinter debugPrinter = new IRPrinter(System.out);
 
 		for (IRInstruction i : instructions) {
-//			//// FOR DEBUG
-//			System.out.print("[CFG.generateInitialBlocks] i:\t");
-//			debugPrinter.printInstruction(i);
-//			//// FOR DEBUG
-
 			if ((i.isLeader || i.opCode == IRInstruction.OpCode.LABEL)
 					&& i.belongsToBlock == null) {
+
 				//// FOR DEBUG
-				System.out.print("[CFG.generateInitialBlocks] i:\t");
-				debugPrinter.printInstruction(i);
+				// System.out.print("[CFG.generateInitialBlocks] i:\t");
+				// debugPrinter.printInstruction(i);
 				//// FOR DEBUG
 
 				BasicBlockBase newBlock;
@@ -829,6 +806,7 @@ public class ControlFlowGraph {
 		Set<IRInstruction> tempout = new HashSet<>();
 		Set<IRInstruction> gen = new HashSet<>();
 		Set<IRInstruction> inSubKill = new HashSet<>();
+		// int iterations = 0;
 
 		// If there is a change after the iteration in any of
 		// the OUT sets, then 'change' remains true
@@ -861,12 +839,27 @@ public class ControlFlowGraph {
 				if (!(bb.out.containsAll(tempout) && tempout.containsAll(bb.out)))
 					change = true;
 			}
+			// iterations++;
 		}
-
+		// System.out.println("[CFG.generateReachingDefSets] Convergence occurred after "+iterations+" iterations.");
 	}
 
 	public void printAllBasicBlocks() {
 		IRPrinter blockPrinter = new IRPrinter(System.out);
+
+		System.out.print("Conditional branch targets: {");
+        for (BasicBlockBase block : this.blocks) {
+            if (((MaxBasicBlock)block).reachedByConditionalBranch())
+                System.out.print(" "+block+",");
+        }
+        System.out.println("}");
+
+        System.out.println("\nCFG EDGES:");
+		for (CFGEdge edge : this.edges) {
+			System.out.println("\t{ "+edge.start + " --> "+edge.end+" }");
+		}
+		System.out.println();
+
 		for (BasicBlockBase block : this.blocks) {
 			System.out.println("________________________________________");
 			if (USE_MAXIMAL_BLOCKS) {
@@ -877,43 +870,51 @@ public class ControlFlowGraph {
 					System.out.print("\t");
 					blockPrinter.printInstruction(i);
 				}
-				System.out.print(" }\n\nPREDS: { ");
+				System.out.print(" }\n\nPREDS("+bb+"): { ");
 				for (BasicBlockBase p : bb.predecessors) {
-					System.out.print(String.valueOf(p.blocknum) + ", ");
+					System.out.print(p + ", ");
 				}
-				System.out.print(" }\nSUCCS: { ");
+				System.out.print(" }\nSUCCS("+bb+"): { ");
 				for (BasicBlockBase s : bb.successors) {
-					System.out.print(String.valueOf(s.blocknum) + ", ");
+					System.out.print(s + ", ");
 				}
 				System.out.println(" }\n");
-				System.out.println("PATHS FROM ROOT: {");
+				System.out.println("PATHS FROM ROOT ["+this.entryNode+" --> "+bb+"]: {");
 				for (List<BasicBlockBase> path : block.pathsFromRoot) {
 					System.out.println("\t"+path);
 				}
-				System.out.println(" }\n");
+				System.out.println("}\n");
 				if (bb.iDom != null)
-					System.out.println("IDOM("+bb.blocknum+") = "+bb.iDom.blocknum);
-				System.out.print("DOMS: { ");
+					System.out.println("IDOM("+bb+") = "+bb.iDom);
+				System.out.print("DOM("+bb+"): { ");
 				for (BasicBlockBase d : bb.dom) {
-					System.out.print(String.valueOf(d.blocknum) + ", ");
+					System.out.print(d + ", ");
 				}
 				System.out.println(" }");
-				System.out.println("\nGEN: { ");
+				System.out.print("\nGEN("+bb+"): { ");
+				if (!bb.gen.isEmpty())
+					System.out.println();
 				for (IRInstruction g : bb.gen) {
 					System.out.print("\t");
 					blockPrinter.printInstruction(g);
 				}
-				System.out.println("}\n\nKILL: { ");
+				System.out.print("}\n\nKILL("+bb+"): { ");
+				if (!bb.kill.isEmpty())
+					System.out.println();
 				for (IRInstruction k : bb.kill) {
 					System.out.print("\t");
 					blockPrinter.printInstruction(k);
 				}
-				System.out.println("}\n\nIN: { ");
+				System.out.print("}\n\nIN("+bb+"): { ");
+				if (!bb.in.isEmpty())
+					System.out.println();
 				for (IRInstruction in : bb.in) {
 					System.out.print("\t");
 					blockPrinter.printInstruction(in);
 				}
-				System.out.println("}\n\nOUT: { ");
+				System.out.print("}\n\nOUT("+bb+"): { ");
+				if (!bb.out.isEmpty())
+					System.out.println();
 				for (IRInstruction o : bb.out) {
 					System.out.print("\t");
 					blockPrinter.printInstruction(o);

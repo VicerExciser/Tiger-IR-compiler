@@ -41,6 +41,8 @@ public abstract class BasicBlockBase implements Comparable<BasicBlockBase> {
 	public Set<BasicBlockBase> predecessors;
 	public Set<BasicBlockBase> successors;
 
+	// REMINDER: All blocks in dom(Bn) exist on every possible path
+	// 			 from B0 to Bn
 	public Set<BasicBlockBase> dom;
 	public BasicBlockBase iDom;		// Immediate dominator block
 

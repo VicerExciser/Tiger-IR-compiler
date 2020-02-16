@@ -25,6 +25,8 @@ public class IROptimizer {
     private static String TEST_IN_FILEPATH = PROJECT_ROOT_DIR + "public_test_cases/sqrt/sqrt.ir";   //"example/example.ir";
     private static String TEST_OUT_FILEPATH = PROJECT_ROOT_DIR + "out.ir";
 
+    public static boolean VERBOSE_REACHING_DEFS = false;
+
     ////  TODO  ////
     // Still need to throw some IRExceptions at potential failure points in
     // the basic block classes, CFG classes, and IRUtil to verify our design
@@ -45,10 +47,10 @@ public class IROptimizer {
             // System.out.println("=== REMOVING DEAD INSTRUCTION:\n\tFunction: "
             //         + f.name + "\n\tLine: " + String.valueOf(i.irLineNumber)
             //         + "\n\tOp: " + i.opCode.toString() + "\n===\n");
-            System.out.print("=== REMOVING DEAD INSTRUCTION [line "+ i.irLineNumber+"]:\t");
+            System.out.print("=== REMOVING DEAD INSTRUCTION ===   [line "+ i.irLineNumber+"]:\t");
             debugPrinter.printInstruction(i);
             f.instructions.remove(i);
-            System.out.println("Instruction removed: "+((MaxBasicBlock) i.belongsToBlock).removeInstruction(i));
+            // System.out.println("Instruction removed: "+((MaxBasicBlock) i.belongsToBlock).removeInstruction(i));
         }
     }
 
@@ -87,6 +89,9 @@ public class IROptimizer {
         // Remove all useless code (an operation is useless if no operation uses its result, or if all uses of the result are themselves dead)
         // Remove all unreachable code (an operation is unreachable if no valid control-flow path contains the operation)
         for (IRFunction function : program.functions) {
+            System.out.println("\n==--==--====--==--====--==--====--==--====--==--==");
+            System.out.println("==--==--====--==--====--==--====--==--====--==--==");
+            System.out.println(" FUNCTION \""+function.name+"\" ==--==--====--==--====--==--====--==--==\n");
             // Commence the 'Mark' routine to be followed with 'Sweep'
             // IRUtil.InstructionComparator instComparator = new IRUtil.InstructionComparator();
             // PriorityQueue<IRInstruction> worklist = new PriorityQueue<>(10, instComparator);
@@ -96,6 +101,8 @@ public class IROptimizer {
             ControlFlowGraph cfg = new ControlFlowGraph(function);
             cfg.build();
             allCFGs.add(cfg);
+
+            System.out.println("("+cfg.getBlocks().size()+" BASIC BLOCKS)");
 
 /*
             //// NOTE: Best to analyze CFG from bottom-to-top (leaf-to-root) ////
@@ -176,63 +183,28 @@ public class IROptimizer {
             }
 
             //// FOR DEBUG ////
-            System.out.println("\n<<<  GLOBAL DEF MAP >>>");
+            System.out.println("\n\n<<<  GLOBAL DEF MAP >>>");
             for (String key : globalDefMap.keySet()) {
                 System.out.println("Var \""+key+"\" defined by:");
                 for (IRInstruction inst : globalDefMap.get(key)) {
-                    System.out.print("\t[B"+inst.belongsToBlock.blocknum+"]\t");
+                    System.out.print("\t["+inst.belongsToBlock+"] "/*"+inst.irLineNumber+".*/+"\t");
                     debugPrinter.printInstruction(inst);
                 }
             }
-            System.out.println("\n<<<  GLOBAL USE MAP >>>");
+            System.out.println("\n\n<<<  GLOBAL USE MAP >>>");
             for (String key : globalUseMap.keySet()) {
                 System.out.println("Var \""+key+"\" used by:");
                 for (IRInstruction inst : globalUseMap.get(key)) {
-                    System.out.print("\t[B"+inst.belongsToBlock.blocknum+"]\t");
+                    System.out.print("\t["+inst.belongsToBlock+"] "/*+inst.irLineNumber+".*/+"\t");
                     debugPrinter.printInstruction(inst);
                 }
             }
-            System.out.println("\n");
-
-            System.out.print("Conditional branch targets: {");
-            // System.out.println();
-            // for (IRInstruction inst : function.instructions) {
-            //     if (inst.isCondBranchTarget) {
-            //         System.out.print("\t");
-            //         debugPrinter.printInstruction(inst);
-            //     }
-            // }
-            for (BasicBlockBase block : cfg.getBlocks()) {
-                if (((MaxBasicBlock)block).reachedByConditionalBranch())
-                    System.out.print(" B"+block.blocknum+",");
-            }
-            System.out.println("}");
+            // System.out.println("\n");
 
             System.out.println("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
             cfg.printAllBasicBlocks();
             System.out.println("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
-/*
-            System.out.println("CFG EDGES:");
-            for (CFGEdge edge : cfg.getEdges()) {
-                System.out.println("\t{ "+edge.start + " --> "+edge.end+" }");
-            }
-            System.out.println("\n");
 
-            BasicBlockBase exitNode = cfg.getEntryNode();
-            int highestBNum = BasicBlockBase.BLOCKNUM-1;
-            for (BasicBlockBase b : cfg.getBlocks()) {
-                if (b.blocknum == highestBNum) {
-                    exitNode = b;
-                    break;
-                }
-            }
-            for (BasicBlockBase b : cfg.getBlocks())
-                cfg.printAllPaths(cfg.getEntryNode(), b);
-            System.out.println("\n");
-            //// FOR DEBUG ////
-
-            cfg.generateDominatorTree();  // Now that all paths from root have been computed for each block!
-*/
 
             // Commence the 'Mark' routine to be followed with 'Sweep'
             for (IRInstruction instruction : function.instructions) {
@@ -246,394 +218,113 @@ public class IROptimizer {
 
             IRInstruction i = worklist.poll();
             while (i != null) {
-                BasicBlockBase iBlock = i.belongsToBlock;
-                if (iBlock == null) {
-                    System.out.println("[IROptimizer-worklistMark] iBlock found null");
-                    i = worklist.poll();
-                    // continue;
-                    break;
-                }
-                IRInstruction insts[] = (((MaxBasicBlock) iBlock).instructions.toArray(new IRInstruction[iBlock.size]));
-                // if (IRUtil.isXUse(i)) {
-                Set<IRVariableOperand> sourceOperands = IRUtil.getSourceOperands(i);
-                if (!sourceOperands.isEmpty()) {
-                    for (IRVariableOperand src : sourceOperands) {
-                        if (src == null) continue;
-                        try {
-                            // Scanning all instructions that define any source variable operands used by 'i'
-                            for (IRInstruction inst : globalDefMap.get(src.getName())) {
-                                if (inst == null)
-                                    continue;
-//                                    break;
-                                if (inst.belongsToBlock.equals(iBlock) || i.equals(inst))
-                                    continue;
-//                                    break;
-                                boolean definitionReaches = true;
-
-                                // A def reaches instruction i if it is in the IN set for block B(i)
-                                // Must also ensure that the def is not killed locally within B(i) before instruction i
-                                if (iBlock.in.contains(inst)) {
-                                    for (int idx = 0; idx < Arrays.asList(insts).indexOf(i); idx++) {  //iBlock.size; idx++) {
-                                        if (insts[idx].equals(i)) break;                        // Only scan thru block up to instruction i
-
-                                        if (iBlock.operandDefs.containsKey(src) 
-                                                && iBlock.operandDefs.get(src).contains(insts[idx]))
-                                            definitionReaches = false;
-
-                                        if (iBlock.operandUses.containsKey(src) && iBlock.operandUses.get(src).contains(insts[idx])) 
-                                        {     // Could search here for unused and/or unreachable code
-                                            
-                                        }
-                                    }
-
-                                    /*
-                                    for (IRInstruction g : iBlock.gen) {
-                                        if (((IRVariableOperand) g.operands[0]).getName().equals(src.getName())) {
-                                            if (g.irLineNumber < i.irLineNumber)
-                                                definitionReaches = false;
-                                        }
-                                    }
-                                    */
-                                } 
-                                // else definitionReaches = false;
-                       
-
-
-                                if (definitionReaches) {
-                                    // System.out.print("$$$\tInstruction marked for sweep:\t");
-                                    // debugPrinter.printInstruction(inst);
-
-                                    if (!marked.contains(inst)) marked.add(inst);
-                                    if (!worklistContains(worklist, inst)) worklist.add(inst);
-                                }
-                                else {
-                                    // System.out.print("XXX\tDefinition determined non-reaching:\t");
-                                    // debugPrinter.printInstruction(inst);
-                                }
-                                // System.out.print("--->\ti:\t");
-                                // debugPrinter.printInstruction(i);
-                                // System.out.println();
-                                // printWorklist(worklist);
-                            }
-                        } catch (NullPointerException npe) {
-//                            continue;
-                            System.out.println("[IROptimizer-worklistMark] NullPointerException caught");
-                            break;
-                        }
-
-                    }
+                // System.out.print("i:\t");
+                // debugPrinter.printInstruction(i);
+                if (VERBOSE_REACHING_DEFS) {
+                    System.out.print(">  i ("+i.belongsToBlock+", line "+i.irLineNumber+"):\t");
+                    debugPrinter.printInstruction(i);
+                    // System.out.println("\ti.sourceOperands = "+IRUtil.getSourceOperands(i)); //+"\n");
+                    System.out.println();
                 }
 
-                for (IRInstruction g : iBlock.gen) {
-                    boolean foundUseBeforeDef = false;
-                    boolean foundDefBeforeDef = false;
-                    boolean foundDefBeforeUseAndDef = false;
-                    boolean foundUseAfterDef = false;
-                    boolean foundRedefAfterDef = false;
-                    boolean foundRedefAfterDefBeforeUse = false;
-
-                    int defIdx = Arrays.asList(insts).indexOf(g);
-                    for (int curIdx = 0; curIdx < iBlock.size; curIdx++) {
-                        if (IRUtil.isDefinition(insts[curIdx]) 
-                                && ((IRVariableOperand)insts[curIdx].operands[0]).getName().equals(((IRVariableOperand)g.operands[0]).getName())) {
-                            if (curIdx < defIdx) {
-                                if (foundUseBeforeDef && !foundDefBeforeDef){ 
-                                    foundDefBeforeUseAndDef = true;
-                                    foundDefBeforeDef = true;
-                                }
-                            } else if (curIdx > defIdx) {
-                                foundRedefAfterDef = true;
-                                if (!foundUseAfterDef)
-                                    foundRedefAfterDefBeforeUse = true;
-                            }
-                        }
-                        // ... TODO: Now check for uses ...
-                    }
-                }
-
-/*
-                    // If def(src) is not marked then: mark def(src), add def(src) to worklist
-                    for (BasicBlockBase bb : cfg.getBlocks()) {
-                        if (bb.operandDefs.containsKey(src.getName())) {    // If a definition for this source operand exists within bb
-                            // (could also iterate thru the bb.gen set)
-                            for (IRInstruction srcDef : bb.operandDefs.get(src.getName())) {    // Returns a set of instructions that define src
-
-                                if (srcDef.irLineNumber > i.irLineNumber) continue;
-                                boolean redefBeforeUse = false;
-                                for (IRInstruction definition : cfg.getUniversalDefinitions()) {
-                                    if (definition.equals(srcDef) || definition.equals(i)) continue;
-                                    if (definition.irLineNumber < i.irLineNumber
-                                            && definition.irLineNumber > srcDef.irLineNumber)   // NOTE: Don't think we can rely on only checking IR line #s
-                                        redefBeforeUse = true;                                  // ... should check predecessors, or at least dominators
-                                }
-                                if (!redefBeforeUse && i.belongsToBlock.in.contains(srcDef)) {
-                                    marked.add(srcDef);
-                                    if (!worklist.contains(srcDef))
-                                        worklist.add(srcDef);
-                                } else if (!IRUtil.isCritical(srcDef)) {
-                                    marked.remove(srcDef);
-                                    worklist.remove(srcDef);
-                                }
-                            }
-                        }
-                    }
-                }
-                    // for (BasicBlockBase bb : i.belongsToBlock.predecessors) {
-                    //     marked.add(bb.terminator);
-                    //     if (!worklist.contains(bb.terminator))
-                    //         worklist.add(bb.terminator);
-                    // }
-                    // for (BasicBlockBase bb : i.belongsToBlock.dom) {
-                    //     marked.add(bb.terminator);
-                    //     if (!worklist.contains(bb.terminator))
-                    //         worklist.add(bb.terminator);
-                    // }
+                // BasicBlockBase iBlock = i.belongsToBlock;
+                // if (iBlock == null) {
+                //     System.out.println("[IROptimizer::Mark] iBlock found null");
+                //     i = worklist.poll();
+                //     break;
                 // }
-*/
+                MaxBasicBlock iBlock = (MaxBasicBlock) i.belongsToBlock;
 
-                i = worklist.poll();
-            }
-/*
-            Set<IRInstruction> removeSet = new LinkedHashSet<>();
-            for (BasicBlockBase bb : cfg.getBlocks()) 
-            {
-                IRInstruction insts[] = (((MaxBasicBlock) bb).instructions.toArray(new IRInstruction[bb.size]));
-                int ii, jj;
-                for (ii = 0; ii < insts.length; ii++) 
-                {
-                    boolean unused = true;
-                    boolean redefined = false;
-                    boolean instIsObsolete = false;
-                    if (IRUtil.isDefinition(insts[ii])) 
-                    {
-                        // Check for killer redefinitions and unused definitions for current instruction within its own basic block
-                        IRVariableOperand def = ((IRVariableOperand) insts[ii].operands[0]);
-                        for (jj = ii+1; jj < insts.length; jj++) 
-                        {
-                            if (IRUtil.isXUse(insts[jj])) {
-                                if (IRUtil.getSourceOperands(insts[jj]).contains(def))      // Found a use of our defined var
-                                    unused = false;
-                            }
-                            
-                            if (IRUtil.isDefinition(insts[jj])                          // Check if redefined before ever being used
-                                    && ((IRVariableOperand) insts[jj].operands[0]).getName().equals(def.getName())) {
-                                if (!unused) 
-                                    redefined = true;
-                            }
-                            
-                            instIsObsolete = (unused || redefined) && !(IRUtil.isCritical(insts[ii]));
-                            if (instIsObsolete) {
-                                //// FOR DEBUG ////
-                                System.out.print("\n!!!  [DEAD]   Determined that the instruction:\t");
-                                debugPrinter.printInstruction(insts[ii]);
-                                String reason = redefined ? "REDEFINED" : unused ? "UNUSED" : "{N/A}";
-                                System.out.print("!!!  is obsolete due to "+reason+" def var \""+def.getName()+"\" in:\t");
-                                debugPrinter.printInstruction(insts[jj]);
-                                System.out.println();
-                                //// FOR DEBUG ////
-
-                            //     marked.remove(insts[ii]);
-                            //     worklist.remove(insts[ii]);
-                                removeSet.add(insts[ii]);
-                            }
-
-                        }
-
-                        
-
-                        instIsObsolete = (unused || redefined) && !(IRUtil.isCritical(insts[ii]));
-
-                        // Perform same checks on predecessors and successors
-                        if (!instIsObsolete) {
-                            //
-                            for (BasicBlockBase p : bb.predecessors) {
-
-                            }
-                            for (CFGEdge e : cfg.getEdgesToBlock(bb)) {
-
-                            }
-                        }
-
-
-                    }
-
-                }
-
-            }
-
-            for (IRInstruction deadOp : removeSet) {
-                marked.remove(deadOp);
-                worklist.remove(deadOp);
-            }
-*/
-
-
-/*
-                System.out.println("======================================");
-                System.out.print("\n\ni:\t");
-                debugPrinter.printInstruction(i);
-                if (IRUtil.isDefinition(i)) {
-                    System.out.print("\tdef: "+((IRVariableOperand)i.operands[0]).getName());
-                }
+                // (i has form "x <-- op y" or "x <-- y op z")
+                // if (IRUtil.isDefinition(i)) {
                 if (IRUtil.isXUse(i)) {
-                    System.out.print("\n\tsources: { ");
-                    for (IRVariableOperand src : IRUtil.getSourceOperands(i)) {
-                        System.out.print(((IRVariableOperand)src).getName());
-                        System.out.print(", ");
-                    }
-                    System.out.println(" }");
-                }
-*/
-                // smallBlocks(function, i, worklist, marked);
-                
-                // could begin at entryNode, walk predecessors until reaching target block
-                // all using and defining instructions for each block is recorded in a Set
-                // (value of operandDefs or operandUses HashMap)
-                //}
-	            			
-				// For each block on path (all successors?), check
-				// block.operandDefs.get(src.getName())
-/*	            			
-                if (IRUtil.isXUse(i)) {
-                    // For each instruction j that contains a def of y or z and reaches i, mark and add to worklist
-                    for (IRInstruction j : cfg.getUniversalDefinitions()) { //For j in gen(basic block)
-                        if (j.equals(i)) continue;
+                    // System.out.print("(is use)\t");
+                    // For each instruction j that contains a def of y or z that reaches i...
+                    // for (IRInstruction j : cfg.getUniversalDefinitions()) {
+                    // for (BasicBlockBase p : iBlock.predecessors) {
+                    // for (IRInstruction j : ((MaxBasicBlock)p).instructions) {
 
-                        if (function.instructions.indexOf(j) > function.instructions.indexOf(i)) continue;
-                        if (j.irLineNumber > i.irLineNumber) continue;
-*/
-/*
-                        System.out.print("\nj:\t");
-                        debugPrinter.printInstruction(j);
+                        // Checking generated definitions of predecessors
+                        // for (IRInstruction j : p.gen) {
+                        // for (IRInstruction j : p.out) {
+                    Set<IRInstruction> checkSet = new HashSet<>(iBlock.in);
+                    checkSet.addAll(iBlock.instructions);
+                    // for (IRInstruction j : iBlock.in) {
+                    for (IRInstruction j : checkSet) {
+                    // for (IRInstruction j : function.instructions) {
                         if (IRUtil.isDefinition(j)) {
-                            System.out.print("\tdef: "+((IRVariableOperand)j.operands[0]).getName());
-                        }
-                        if (IRUtil.isXUse(j)) {
-                            System.out.print("\n\tsources: { ");
-                            for (IRVariableOperand src : IRUtil.getSourceOperands(j)) {
-                                System.out.print(((IRVariableOperand)src).getName());
-                                System.out.print(", ");
-                            }
-                            System.out.println(" }");
-                        }
-                        System.out.println();
-*/
-/*
-                        boolean isReachingDefinition = false;
-                        for (IRVariableOperand src : IRUtil.getSourceOperands(i)) {
-                            // Def'd variable is always the first operand for definitions                            
-                            if (!(((IRVariableOperand) j.operands[0]).getName().equals(src.getName())))
-                                continue;
+                            if (j.equals(i)) continue;      // Should exclude self...right?
 
-                            // Check if this definition of src reaches instruction i now:
-                            // A def reaches instruction i
-                            //	1) if it in the IN set for the basic block B(i) containing i, and
-                            //	2) the def is not killed locally within B(i) before instruction i
-                            BasicBlockBase iBlock = i.belongsToBlock;
+                            // The first operand of a defining instruction is the LHS value to be written
+                            IRVariableOperand lhs = (IRVariableOperand) j.operands[0];
+                            boolean isReachingDefinition = false;
 
-                            if (iBlock.in.contains(j)) { 
-                                if (iBlock.out.contains(j))
-                                    isReachingDefinition = true;
-                                else
-                                {
-                                    // ...
-                                }
-                            }
-*/
-/*
-                                if (iBlock.in.contains(j)) {
-                                    // if (iBlock.leader.equals(i)) {
-                                    if (iBlock.terminator.equals(i)){
-                                        isReachingDefinition = true;
+                            // System.out.print("i:\t");
+                            // debugPrinter.printInstruction(i);
+                            // System.out.println("i.sourceOperands = "+IRUtil.getSourceOperands(i)+"\n");
+
+                            for (IRVariableOperand rhs : IRUtil.getSourceOperands(i)) {
+                                if (lhs.getName().equals(rhs.getName())) {
+                                    //// FOR DEBUG
+                                    // System.out.print("[IROptimizer::Mark] Match found: LHS=\""+lhs.getName()+"\"  RHS=\""+rhs.getName()+"\"\n");
+                                    // System.out.print("j:\t");
+                                    // debugPrinter.printInstruction(j);
+                                    if (VERBOSE_REACHING_DEFS) {
+                                        System.out.print(">>  j ("+j.belongsToBlock+", line "+j.irLineNumber+"):\t");
+                                        debugPrinter.printInstruction(j);
                                     }
-                                    //else if(iBlock.out.contains(j)) {
-                                     //   isReachingDefinition = true; // condition two from lecture 4, slide 4. If it is in the out set of the block, then it was not killed within the block
-                                    //}
-                                    else if (ControlFlowGraph.USE_MAXIMAL_BLOCKS) {
-                                        // Inspect preceeding ops in the block for def killing
+                                    // System.out.println();
+                                    //// FOR DEBUG
 
-                                        for (IRInstruction op : ((MaxBasicBlock) iBlock).instructions) {
-                                            if (op.equals(i)) {
-                                                isReachingDefinition = true;
-                                                break;
-                                            }
-                                            else if (IRUtil.isDefinition(op)
-                                                    && ((IRVariableOperand) op.operands[0]).toString().equals(src.toString())) {
-                                                isReachingDefinition = false;
-                                                break;
-                                            }
+                                    if (isReachingDef(i, j, function)) {
+                                        if (VERBOSE_REACHING_DEFS) {
+                                            System.out.println("[IROptimizer::Mark] Instruction 'i' is reached by def 'j'");
+                                            // System.out.print(i.belongsToBlock+" (line "+i.irLineNumber+")\ti:\t");
+                                            // debugPrinter.printInstruction(i);
+                                            // System.out.print(j.belongsToBlock+" (line "+j.irLineNumber+")\tj:\t");
+                                            // debugPrinter.printInstruction(j);
+                                            System.out.println();
                                         }
-                                    }
-                                    else {	// Can skip condition 2 if analyzing instruction-level CFG
                                         isReachingDefinition = true;
+                                        break;
+                                    } 
+                                    else {
+                                        if (VERBOSE_REACHING_DEFS)
+                                            System.out.println("[IROptimizer::Mark] Instruction 'i' is NOT reached by def 'j'\n");
+                                    //     System.out.print(i.belongsToBlock+"\ti:\t");
+                                    //     debugPrinter.printInstruction(i);
+                                    //     System.out.print(j.belongsToBlock+"\tj:\t");
+                                    //     debugPrinter.printInstruction(j);
+                                    //     System.out.println();
+                                    }
+                                }
+                                
+                            }
+
+                            if (isReachingDefinition) {
+                                if (!marked.contains(j)) {
+                                    marked.add(j);
+                                
+                                    if (!worklistContains(worklist, j)) {
+                                        worklist.add(j);
+                                        if (VERBOSE_REACHING_DEFS)
+                                            printWorklist(worklist);
                                     }
                                 }
                             }
-*/
-/*
-                        }
-                        
-                        if (isReachingDefinition) {
-                            System.out.print("\n\n[main] Found reaching definition j:\t");
-                            debugPrinter.printInstruction(j);
-                            System.out.print("\t\t for instruction i:\t");
-                            debugPrinter.printInstruction(i);
-                            System.out.println("\n");
-
-                            marked.add(j);
-                            worklist.add(j);
                         }
                     }
-                } 
-
-                 if (IRUtil.isDefinition(i)) {
-                    String def = ((IRVariableOperand) i.operands[0]).getName();
-
-                    //
-                } 
-                
-            }
-*/
-/*
-            IRInstruction curOp;
-            while ((curOp = worklist.poll()) != null)
-            {
-                // Format of curOp:  x <-- op y  OR  x <-- y op z
-                IROperand y = curOp.operands[0];
-                IROperand z = curOp.operands.length > 1 ? curOp.operands[1] : null;
-
-                // Scan each instruction for operations that contain a def for y or z
-                // that reaches the curOp instruction
-                for (IRInstruction inst : function.instructions) {
-                    // Check if inst is a definition (assign, array_load, callr, binary operations)
-                    if (IRUtil.isDefinition(inst)) {
-                        boolean isReachingDefinition = false;
-
-                        // Check if inst if a def of either y or z
-                        if (inst.operands[0] == y) {
-                            // Check if this definition of y reaches curOp
-                            // TODO
-                            isReachingDefinition = true;    // based on check result
-                        }
-                        else if (z != null && inst.operands[0] == z) {
-                            // Check if this definition of z reaches curOp
-                            // TODO
-                            isReachingDefinition = true;    // based on check result
-                        }
-
-                        // If inst is a reaching definition of curOp,
-                        // mark it and add to worklist
-                        if (isReachingDefinition) {
-                            marked.add(inst);
-                            worklist.add(inst);
-                        }
-                    }
+                // }
                 }
+                if (worklist.isEmpty()) break;
+                i = worklist.poll();
+                if (VERBOSE_REACHING_DEFS)
+                    System.out.println("-----------------------------------------------------------------------");
             }
-*/
+
             sweep(function, marked);
             
-
+/*
             System.out.println("FUNCTION "+function.name+" ("+cfg.getBlocks().size()+" BASIC BLOCKS)\n");
             for (IRInstruction inst : function.instructions) {
                 if (inst.isLeader) {
@@ -652,26 +343,129 @@ public class IROptimizer {
             System.out.println("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
             cfg.printAllBasicBlocks();
             System.out.println("\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
+*/
 
+        System.out.println();
         }
 
-        /*
-NOTES:
-• A def reaches instruction i
-1) if it is in the IN set for the basic
-block B(i) containing i, and
-2) the def is not killed locally
-within B(i) before instruction i
-        */
-
-
-
         // Print the IR to another file
-
         IRPrinter filePrinter = new IRPrinter(new PrintStream(outfile));
         filePrinter.printProgram(program);
-
     }
+
+
+    /**    
+        A definition "j" reaches instruction "i" iff:
+            1)  "j" is in the IN set for the basic block B(i) containing "i", and
+            2)  the def is not killed locally within B(i) before instruction "i"
+    **/
+    public static boolean isReachingDef(IRInstruction i, IRInstruction j, IRFunction f) {
+        BasicBlockBase iB = i.belongsToBlock;
+        BasicBlockBase jB = j.belongsToBlock;
+
+        // Check the IN set for i's basic block
+        // if (!iB.in.contains(jB) && !iB.equals(jB))
+        //     return false;
+        if (i.irLineNumber < j.irLineNumber && iB.equals(jB))
+            return false;
+
+        // Check all instructions in i's basic block preceeding instruction i
+        IRInstruction instructions[] = (((MaxBasicBlock) iB).instructions.toArray(new IRInstruction[iB.size]));
+        IRVariableOperand defVar = (IRVariableOperand) j.operands[0];
+        boolean reaches = true;
+        boolean usedBeforeKilled = false;
+        boolean defKill = true;
+        IRInstruction k = null;
+
+        IRPrinter debugPrinter = new IRPrinter(System.out);
+        boolean debug = VERBOSE_REACHING_DEFS && false; //j.irLineNumber == 11;
+        if (debug)
+            System.out.println("[isReachingDef] DEBUG FOR  'ASSIGN, T, 0.'");
+
+        // for (int idx = 0; idx < instructions.length; idx++) {
+        for (IRInstruction inst : ((MaxBasicBlock) iB).instructions) {
+        // IRInstruction inst = iB.leader;
+        // while (inst != null) {
+
+            if (debug) {
+                System.out.print("--> inspecting line "+inst.irLineNumber+" for DEBUG:\t");
+                debugPrinter.printInstruction(inst);
+            }
+
+            if (iB.kill.contains(j) && iB.in.contains(j) && !iB.out.contains(j) && !iB.gen.contains(j)) {
+                return false;
+            }
+
+            if (inst.equals(i)) {
+                if (debug)
+                    System.out.println("--> breaking for '(instructions[idx].equals(i))'");
+                break;          // Stop once instruction i is reached
+                // inst = IRUtil.getInstructionAfterThis(f, inst);
+                // continue;
+            }
+            if (inst.equals(j)) {
+                if (debug)
+                    System.out.println("--> continuing for '(instructions[idx].equals(j))'");
+                inst = IRUtil.getInstructionAfterThis(f, inst);
+                continue;
+            }
+            if (inst.irLineNumber < j.irLineNumber && iB.equals(jB)) {
+                if (debug)
+                    System.out.println("--> continuing for '(instructions[idx].irLineNumber < j.irLineNumber && iB.equals(jB))'");
+                inst = IRUtil.getInstructionAfterThis(f, inst);
+                continue;
+                // break;
+            }
+
+            if (IRUtil.isDefinition(inst)) {
+                if (debug) {
+                    System.out.print("--> inspecting line "+inst+" for defKill:\t");
+                    debugPrinter.printInstruction(inst);
+                }
+
+                // Check if this instruction will kill j's definition
+                IRVariableOperand lhs = (IRVariableOperand) inst.operands[0];
+                if (lhs.getName().equals(defVar.getName())) {
+                    if (debug) 
+                        System.out.println("--> found common LHS:\t"+lhs);
+                    
+
+                    // boolean usedBeforeKilled = false;
+                    // boolean defKill = true;
+
+                    // Finally, verify this instruction doesn't use j's definition before killing it
+                    for (IRVariableOperand rhs : IRUtil.getSourceOperands(inst)) {
+                        if (rhs.getName().equals(defVar.getName()))
+                            // defKill = false;
+                            usedBeforeKilled = true;
+                    }
+
+                    // if (!usedBeforeKilled) {
+                    //     defKill = true;
+                    if (usedBeforeKilled) 
+                        defKill = false;
+                    else
+                        k = inst;
+                    
+                }
+            }
+            inst = IRUtil.getInstructionAfterThis(f, inst);
+        }
+
+        if (defKill && k != null) {    // If the definition is killed locally in i's block
+            if (VERBOSE_REACHING_DEFS) {
+                System.out.println("[isReachingDef] Instruction 'i' NOT REACHED by def 'j' -- killed by redef 'k'");
+                System.out.print(">>>  k ("+k.belongsToBlock+", line "+k.irLineNumber+"):\t");
+                debugPrinter.printInstruction(k);
+                System.out.println();
+            }
+            reaches = false;
+            // break;
+            // return false;
+        }
+        return reaches;
+    }
+
     
     // @param i critical instruction pulled off worklist
     // @param f the current function holding the instruction i and the CFG
