@@ -3,6 +3,9 @@ package ir;
 import ir.operand.IROperand;
 import ir.cfg.BasicBlockBase;
 
+import java.util.List;
+import java.util.ArrayList;
+
 public class IRInstruction {
 
     public enum OpCode {
@@ -31,6 +34,8 @@ public class IRInstruction {
     public boolean isCondBranchTarget;
     public BasicBlockBase belongsToBlock;
 
+    public List<IRInstruction> reachingDefinitions;
+
     public IRInstruction() {}
 
     public IRInstruction(OpCode opCode, IROperand[] operands, int irLineNumber) {
@@ -40,6 +45,7 @@ public class IRInstruction {
         this.belongsToBlock = null;
         this.isLeader = false;
         this.isCondBranchTarget = false;
+        this.reachingDefinitions = new ArrayList<>();
     }
 
 }
