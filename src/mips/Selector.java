@@ -156,6 +156,7 @@ public class Selector {
 				// TODO: Use MOVE instead of ADD (keep ADDI for constant operands)
 				// operand[0] will be a register/variable,
 				// operand[1] will be either a var or constant
+			/*
 				// Can replicate an 'assign' using ADD or ADDI with the zero reg ('$0')
 				mipsOperands = new MIPSOperand[3]; //[irInst.operands.length];
 				Register destination = getMappedReg(irInst.operands[0].toString());
@@ -175,6 +176,33 @@ public class Selector {
 					source = getMappedReg(irInst.operands[1].toString());
 				}
 				mipsOperands[2] = source;
+				parsedInst.add(new MIPSInstruction(op, label, mipsOperands));
+			*/
+//---------------------------------------------------------------------------------------------------
+				mipsOperands = new MIPSOperand[irInst.operands.length];
+				Register destination = getMappedReg(irInst.operands[0].toString());
+				mipsOperands[0] = destination;
+				MIPSOperand source = null;
+				if (irInst.operands[1] instanceof IRConstantOperand) {
+					op = MIPSOp.LI;
+					String constVal = ((IRConstantOperand) irInst.operands[1]).getValueString();
+					//// TODO: Add support for "FLOAT" types, currently only checking for hex & dec
+					String constType = ((constVal.toLowerCase()).indexOf('x') >= 0) 
+									? "HEX" : "DEC";
+					source = new Imm(constVal, constType);
+				} else if (irInst.operands[1] instanceof IRLabelOperand
+						|| irInst.operands[1] instanceof IRFunctionOperand) {
+					op = MIPSOp.LA;
+					String addrName = irInst.operands[1].toString();
+					source = new Addr(addrName);
+					if (!labelMap.containsKey(addrName)) {
+						labelMap.put(addrName, (Addr) source);
+					}
+				} else {
+					op = MIPSOp.MOVE;
+					source = getMappedReg(irInst.operands[1].toString());
+				}
+				mipsOperands[1] = source;
 				parsedInst.add(new MIPSInstruction(op, label, mipsOperands));
 				break;
 

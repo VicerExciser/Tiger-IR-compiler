@@ -22,7 +22,7 @@ public class Assembler {
 			System.exit(1);
 		} 
 		try {
-			if (args.length == 2) {
+			if (args.length > 1) { // == 2) {
 				assembler = new Assembler(args[0], args[1]);
 			} else {
 				assembler = new Assembler(args[0], null);
