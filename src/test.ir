@@ -1,0 +1,11 @@
+#start_function
+void main():
+int-list: x, y, z
+float-list:
+	assign, x, 11
+	add, x, x, 2
+	add, y, x, x
+M1:
+	mult, z, x, y
+FIN:
+#end_function
