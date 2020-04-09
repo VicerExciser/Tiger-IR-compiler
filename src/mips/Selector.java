@@ -41,6 +41,16 @@ public class Selector {
 		initializeRegisters();
 	}
 
+	private String findUnusedRegName() {
+		//// Find an unused temporary register to map the operand/variable name to
+		for (String name : tempRegNames) {
+			if (!irToMipsRegMap.containsValue(name)) {
+				return name;
+			}
+		}
+		return null;
+	}
+
 	private Register getMappedReg(String operand) {
 		String associatedRegName = null;
 		if (irToMipsRegMap.containsKey(operand)) {
@@ -48,6 +58,7 @@ public class Selector {
 			// return regs.get(associatedRegName);
 		}
 		else {
+			/*
 			//// Find an unused temporary register to map the operand/variable name to
 			for (String name : tempRegNames) {
 				if (!irToMipsRegMap.containsValue(name)) {
@@ -55,6 +66,11 @@ public class Selector {
 					irToMipsRegMap.put(operand, associatedRegName);
 					break;
 				}
+			}
+			*/
+			associatedRegName = findUnusedRegName();
+			if (associatedRegName != null) {
+				irToMipsRegMap.put(operand, associatedRegName);
 			}
 		}
 
@@ -137,6 +153,7 @@ public class Selector {
 				break;
 
 			case ASSIGN:
+				// TODO: Use MOVE instead of ADD (keep ADDI for constant operands)
 				// operand[0] will be a register/variable,
 				// operand[1] will be either a var or constant
 				// Can replicate an 'assign' using ADD or ADDI with the zero reg ('$0')
@@ -187,33 +204,87 @@ public class Selector {
 				parsedInst.add(parseBinaryOp(MIPSOp.OR, MIPSOp.ORI, irInst.operands));
 				break;
 			
-			case BREQ:
-				// ...
-				// parsedInst.add(parseBranch(..., irInst.operands));
+			case BREQ:	// breq, Label, Rs, Rt --> BEQ Rs, Rt, Label
+/*
+				mipsOperands = new MIPSOperand[3];
+				op = MIPSOp.BEQ;
+				// IROperand brLabel = irInst.operands[0]; // if (o instanceof IRLabelOperand)
+				MIPSOperand branchTarget = null;
+				String branchTargetName = new String(irInst.operands[0].toString() + "_" + parentName);
+				if (labelMap.containsKey(branchTargetName)) {
+					branchTarget = labelMap.get(branchTargetName);
+				} else if (labelMap.containsKey(irInst.operands[0].toString())) {
+					branchTarget = labelMap.get(irInst.operands[0].toString());
+				} else {
+					branchTarget = new Addr(branchTargetName);
+					labelMap.put(branchTargetName, branchTarget);
+				}
+
+				mipsOperands[2] = branchTarget;
+				IROperand brRs = irInst.operands[1];
+				if (brRs instanceof IRConstantOperand) {
+					if (brRs.type instanceof IRIntType) {
+						mipsOperands[0] = new Imm(brRs.toString(), "DEC");
+					} else {
+						mipsOperands[0] = new Imm(brRs.toString(), "?");
+					}
+				} else {
+					mipsOperands[0] = getMappedReg(brRs.toString());
+				}
+				IROperand brRt = irInst.operands[2];
+				if (brRt instanceof IRConstantOperand) {
+					if (brRt.type instanceof IRIntType) {
+						mipsOperands[1] = new Imm(brRt.toString(), "DEC");
+					} else {
+						mipsOperands[1] = new Imm(brRt.toString(), "?");
+					}
+				} else {
+					mipsOperands[1] = getMappedReg(brRt.toString());
+				}
+				parsedInst.add(new MIPSInstruction(op, label, mipsOperands));
+*/
+				// parsedInst.addAll(parseBranch(MIPSOp.BEQ, null, irInst.operands));
+				parsedInst.add(parseBranch(MIPSOp.BEQ, irInst.operands, parentName));
 				break;
 			
-			case BRNEQ:
-				// parsedInst.add(parseBranch(..., irInst.operands));
+			case BRNEQ:	// brneq, Label, Rs, Rt --> BNE Rs, Rt, Label
+				parsedInst.add(parseBranch(MIPSOp.BNE, irInst.operands, parentName));
 				break;
 			
-			case BRLT:
-				// parsedInst.add(parseBranch(..., irInst.operands));
+			case BRLT:	// brlt, Label, Rs, Rt --> BLT Rs, Rt, Label
+				parsedInst.add(parseBranch(MIPSOp.BLT, irInst.operands, parentName));
 				break;
 			
-			case BRGT:
-				// parsedInst.add(parseBranch(..., irInst.operands));
+			case BRGT:	// brgt, Label, Rs, Rt --> BGT Rs, Rt, Label
+				parsedInst.add(parseBranch(MIPSOp.BGT, irInst.operands, parentName));
 				break;
 			
-			case BRLEQ:
-				// parsedInst.add(parseBranch(..., irInst.operands));
+			case BRLEQ:	// brleq, Label, Rs, Rt -->  BLT Rs, Rt, Label; BEQ Rs, Rt, Label
+				// beq $t0, $t1, Label 		# if $t0 = $t1, goes to Label
+				// slt $t2, $t1, $t0 		# checks if $t0 > $t1
+				// beq $t2, zero, Label 	# if $t0 < $t1, goes to Label
+				parsedInst.add(parseBranch(MIPSOp.BLT, irInst.operands, parentName));
+				parsedInst.add(parseBranch(MIPSOp.BEQ, irInst.operands, parentName));
 				break;
 			
-			case BRGEQ:
-				// parsedInst.add(parseBranch(..., irInst.operands));
+			case BRGEQ:	// brgeq, Label, Rs, Rt --> BGE Rs, Rt, Label
+				parsedInst.add(parseBranch(MIPSOp.BGE, irInst.operands, parentName));
 				break;
 
 			case GOTO:
-				// ...
+        		op = MIPSOp.J;
+        		Addr jumpTarget = null;
+				IRLabelOperand irTarget = (IRLabelOperand) irInst.operands[0];
+				String labelName = new String(irTarget.getName() + "_" + parentName);
+				if (labelMap.containsKey(labelName)) {
+					jumpTarget = labelMap.get(labelName);
+				} else if (labelMap.containsKey(irTarget.getName())) {
+					jumpTarget = labelMap.get(irTarget.getName());
+				} else {
+					jumpTarget = new Addr(labelName);
+					labelMap.put(labelName, jumpTarget);
+				}
+				parsedInst.add(new MIPSInstruction(op, label, jumpTarget));
 				break;
 			
 			case RETURN:
@@ -234,7 +305,7 @@ public class Selector {
 						new Addr(regs.get("$sp"))));
 
 				//// Jump and link to the function ("jal functionName")
-				//// TODO
+				//// TODO: Check if an intrinsic function; do this ^ if not
 
 				//// Restore return address:
 				////	"lw $ra, 0($sp)"
@@ -245,37 +316,80 @@ public class Selector {
 				//// TODO
 
 				// ...
+				mipsOperands = new MIPSOperand[2];
 
-				for (IROperand o : irInst.operands) {
-					if (o instanceof IRFunctionOperand) {
-						//// Replace intrinsic function calls (geti, putc, etc.) with syscalls
-						switch(((IRFunctionOperand)o).getName()) {
-							case "puti":
-								//// TODO
-								break;
-							case "putc":
-								//// TODO
-								break;
-							case "putf":
-								//// TODO
-								break;
-							case "geti":
-								//// TODO
-								break;
-							case "getc":
-								//// TODO
-								break;
-							case "getf":
-								//// TODO
-								break;
-							default:
-								break;
+				// for (IROperand o : irInst.operands) {
+					// if (o instanceof IRFunctionOperand) {
+				
+				//// Replace intrinsic function calls (geti, putc, etc.) with syscalls
+				switch(((IRFunctionOperand) irInst.operands[0]).getName()) {
+
+							/*
+    # print integer in $t0
+    ### Tiger-IR:   call, puti, t0
+    li $v0, 1   # print int
+    # li $v0, 11    # print char
+    move $a0, $t0
+    syscall
+
+    ### Tiger-IR:   call, putc, 10
+    li $v0, 11  # print space
+    li $a0, 10
+    syscall
+							*/
+    				//// TODO: Account for function calls with non-int/char params & more than 1 param
+					case "puti":
+    					//// li $v0, 1   # print int    
+						// mipsOperands = {regs.get("$v0"), new Imm("1", "DEC")};
+						parsedInst.add(new MIPSInstruction(MIPSOp.LI, null, regs.get("$v0"), new Imm("1", "DEC")));
+						//// move $a0, intToPrint
+						String intToPrint = irInst.operands[1].toString();
+						mipsOperands[0] = regs.get("$a0");
+						if (irInst.operands[1] instanceof IRConstantOperand) {
+							mipsOperands[1] = new Imm(intToPrint, "DEC");
+						} else { //if (irInst.operands[1] instanceof IRVariableOperand) {
+							mipsOperands[1] = getMappedReg(intToPrint);
 						}
-					}
-					else if (o instanceof IRLabelOperand) {
-						//// Would find existing label or function name in the program
-					}
+						parsedInst.add(new MIPSInstruction(MIPSOp.MOVE, null, mipsOperands));
+						//// syscall
+						parsedInst.add(new MIPSInstruction(MIPSOp.SYSCALL, null, (MIPSOperand) null));
+						break;
+					case "putc":
+						//// li $v0, 11  # print char
+						// mipsOperands = {regs.get("$v0"), new Imm("11", "DEC")};
+						parsedInst.add(new MIPSInstruction(MIPSOp.LI, null, regs.get("$v0"), new Imm("11", "DEC")));
+						//// li $a0, charToPrint  # e.g., 10 to print a space character
+						String charToPrint = irInst.operands[1].toString();
+						mipsOperands[0] = regs.get("$a0");
+						if (irInst.operands[1] instanceof IRConstantOperand) {
+							mipsOperands[1] = new Imm(charToPrint, "DEC");
+						} else { //if (irInst.operands[1] instanceof IRVariableOperand) {
+							mipsOperands[1] = getMappedReg(charToPrint);
+						}
+						parsedInst.add(new MIPSInstruction(MIPSOp.LI, null, mipsOperands));
+						//// syscall
+						parsedInst.add(new MIPSInstruction(MIPSOp.SYSCALL, null, (MIPSOperand) null));
+						break;
+					case "putf":
+						//// TODO
+						break;
+					case "geti":
+						//// TODO
+						break;
+					case "getc":
+						//// TODO
+						break;
+					case "getf":
+						//// TODO
+						break;
+					default:
+						break;
 				}
+				// }
+				// else if (o instanceof IRLabelOperand) {
+				// 	//// Would find existing label or function name in the program
+				// }
+				// }
 
 				break;
 			
@@ -330,13 +444,39 @@ public class Selector {
         return new MIPSInstruction(op, null, mipsOperands);
     }
 
-/*
-    private MIPSInstruction parseBranch(MIPSOp opcode1, MIPSOp opcode2, 
-                                                    IROperand[] operands) {
+    // private List<MIPSInstruction> parseBranch(MIPSOp opcode1, MIPSOp opcode2, 
+    private MIPSInstruction parseBranch(MIPSOp op, IROperand[] operands, 
+                                                    String parentFuncName) {
+        // List<MIPSInstruction> parsedBranch = new LinkedList<>();
+        MIPSOperand[] mipsOperands = new MIPSOperand[operands.length];
+        Addr branchTarget = null;
+        String labelName = operands[0].toString();
+        String branchTargetName = new String(labelName + "_" + parentFuncName);
 
+        if (labelMap.containsKey(branchTargetName)) {
+            branchTarget = labelMap.get(branchTargetName);
+        } else if (labelMap.containsKey(labelName)) {
+            branchTarget = labelMap.get(labelName);
+        } else {
+            branchTarget = new Addr(branchTargetName);
+            labelMap.put(branchTargetName, branchTarget);
+        }
+        mipsOperands[2] = branchTarget;
 
+        for (int i = 1; i <= 2; i++) {
+            if (operands[i] instanceof IRConstantOperand) {
+                if (((IRConstantOperand) operands[i]).type instanceof IRIntType) {
+                    mipsOperands[i-1] = new Imm(operands[i].toString(), "DEC");
+                } else {
+                    mipsOperands[i-1] = new Imm(operands[i].toString(), "?");
+                }
+            } else {
+                mipsOperands[i-1] = getMappedReg(operands[i].toString());
+            }
+        }
+
+        return new MIPSInstruction(op, null, mipsOperands);
     }
-*/
 
 /*
 	public List<MIPSInstruction> parseCall(IRInstruction call) {

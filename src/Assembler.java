@@ -20,9 +20,13 @@ public class Assembler {
 		if (args.length < 1) {
 			System.out.println("[ERROR] Missing Argument: Tiger-IR file with extension '.ir'");
 			System.exit(1);
-		}
+		} 
 		try {
-			assembler = new Assembler(args[0]);
+			if (args.length == 2) {
+				assembler = new Assembler(args[0], args[1]);
+			} else {
+				assembler = new Assembler(args[0], null);
+			}
 			assembler.run();
 		} catch (StringIndexOutOfBoundsException sioobe) {
 			System.out.println("[ERROR] Tiger-IR filename arg must end with suffix '.ir'");
@@ -31,12 +35,20 @@ public class Assembler {
 		
 	}
 
-	public Assembler(String filename) throws StringIndexOutOfBoundsException, FileNotFoundException, IRException {
+	public Assembler(String filename, String outfilename) throws StringIndexOutOfBoundsException, 
+															FileNotFoundException, IRException {
 		IRReader reader = new IRReader();
-		int start = filename.lastIndexOf('/');
-		if (start < 0) start = 0;
-		else start++;
-		String outName = filename.substring(start, filename.indexOf(".ir"));
+		String outName;
+		if (outfilename == null) {
+			int start = filename.lastIndexOf('/') + 1;
+			outName = filename.substring(start, filename.indexOf(".ir"));
+		} else {
+			outName = outfilename;
+			if (!(".s".equals(outName.substring(outName.length() - 2)))) {
+				System.out.println(outName.substring(outName.length() - 2));
+				outName += ".s";
+			}
+		}
 
 		inFile = reader.parseIRFile(filename);
 		selector = new Selector();	// Instruction selector

@@ -13,6 +13,9 @@ public class Imm extends MIPSOperand {
             // this.val = val.substring(val.indexOf('x') + 1);
             this.type = "HEX";
         }
+        if (val.indexOf('x') >= 0) {
+            this.type = "HEX";
+        }
     }
 
     public int getInt() {
