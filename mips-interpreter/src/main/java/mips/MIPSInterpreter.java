@@ -221,6 +221,13 @@ public class MIPSInterpreter {
         float memDataSingle;
         double memDataDouble;
 
+        /*
+        if (inst == null) {
+            pc += 4;
+            return;
+        }
+        */
+
         switch (inst.op) {
             case ADD:
                 dest = inst.getWrite();

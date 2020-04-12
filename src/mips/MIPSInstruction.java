@@ -101,8 +101,13 @@ public class MIPSInstruction {
                 builder.append(label);
                 return builder.toString();
             }
-            builder.append(label + ": ");
             if (op == MIPSOp.LABEL) {
+                builder.append(label + ": ");
+                return builder.toString();
+            }
+            if (op == MIPSOp.COMMENT) {
+                builder.append("    # ");
+                builder.append(label);
                 return builder.toString();
             }
         }

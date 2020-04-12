@@ -1,11 +1,90 @@
 #start_function
 void main():
-int-list: x, y, z
+int-list: a, b, c, d, e, f, g, h, i, j, x, y, z
 float-list:
 	assign, x, 11
 	add, x, x, 2
 	add, y, x, x
+	goto, M1
+	sub, y, y, x
 M1:
 	mult, z, x, y
+	call, puti, x
+    call, putc, 10
+    call, puti, y
+    call, putc, 10
+    call, puti, z
+    call, putc, 10
+    call, putc, 10
+init:
+	assign, a, z
+	add, a, a, 1
+	add, b, a, 1
+	add, c, b, 1
+	add, d, c, 1
+	add, e, d, 1
+	add, f, e, 1
+	add, g, f, 1
+	add, h, g, 1
+	add, i, h, 1
+	add, j, i, 1
+print:
+    call, puti, a
+    call, putc, 10
+
+    call, puti, b
+    call, putc, 10
+
+    call, puti, c
+    call, putc, 10
+
+    call, puti, d
+    call, putc, 10
+
+    call, puti, e
+    call, putc, 10
+
+    call, puti, f
+    call, putc, 10
+
+    call, puti, g
+    call, putc, 10
+
+    call, puti, h
+    call, putc, 10
+
+    call, puti, i
+    call, putc, 10
+
+    call, puti, j
+    call, putc, 10
 FIN:
+	call, routine, f, g, h, i, j
+	call, putc, 10
+    call, puti, z
+    call, putc, 10
+    call, putc, 10
+    callr, z, geti
+    call, puti, z
+    call, putc, 10
+#end_function
+
+#start_function
+void routine(int arg0, int arg1, int arg2, int arg3, int arg4):
+int-list:
+float-list:
+	call, putc, 10
+    call, putc, 10
+    call, putc, 10
+    call, putc, 10
+	call, puti, arg0
+    call, putc, 10
+    call, puti, arg1
+    call, putc, 10
+    call, puti, arg2
+    call, putc, 10
+    call, puti, arg3
+    call, putc, 10
+    call, puti, arg4
+    call, putc, 10
 #end_function

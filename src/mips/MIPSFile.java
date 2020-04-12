@@ -75,6 +75,7 @@ public class MIPSFile {
 
 		//// End of program (i.e., main function) must make 'exit' syscall
 		if ("main".equals(function.name.toLowerCase())) {
+			append(new MIPSInstruction(MIPSOp.COMMENT, "Program exit", (MIPSOperand[]) null));
 			MIPSOperand[] exitOperands = {new Register("$v0", false), new Imm("10", "DEC")};
 			append(new MIPSInstruction(MIPSOp.LI, null, exitOperands));	// li $v0, 10
 			append(new MIPSInstruction(MIPSOp.SYSCALL, null, (MIPSOperand[]) null));  // syscall

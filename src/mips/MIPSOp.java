@@ -20,7 +20,7 @@ public enum MIPSOp {
     C_EQ_D(true), C_NE_D(true), C_LT_D(true), C_GT_D(true), C_GE_D(true),
     BC1T, BC1F,
     // just for printing
-    DIRECTIVE, LABEL, NOP;
+    DIRECTIVE, LABEL, NOP, COMMENT;
 
     public boolean floatOp;
     public String precision;

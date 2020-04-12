@@ -5,6 +5,10 @@ public class Imm extends MIPSOperand {
     private String val;
     private String type;
 
+    public Imm(String val) {
+        this(val, "DEC");
+    }
+
     public Imm(String val, String type) {
         this.val = val;
         this.type = type;
