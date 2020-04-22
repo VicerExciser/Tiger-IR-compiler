@@ -359,7 +359,7 @@ public class Selector {
 */
 
 
-				//// UPDATE (4/22/20): Stack pointer should initially be pointing to $fp; sp+4 = $ra; sp+8 = arg0
+				//// UPDATE (4/22/20): Stack pointer should initially be pointing to top of current stack frame
 				mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.LW, null,
 						mipsParam,
 						new Addr(new Imm(String.valueOf(argOffset)), regs.get("$sp"))));
@@ -558,77 +558,31 @@ public class Selector {
 				break;
 
 			case ADD:
-				// parsedInst.add(parseBinaryOp(MIPSOp.ADD, MIPSOp.ADDI, irInst.operands));
 				parseBinaryOp(parsedInst, MIPSOp.ADD, MIPSOp.ADDI, irInst.operands);
 				break;
 
 			case SUB:
-				// parsedInst.add(parseBinaryOp(MIPSOp.SUB, null, irInst.operands));
 				parseBinaryOp(parsedInst, MIPSOp.SUB, null, irInst.operands);
 				break;
 
 			case MULT:
-				// parsedInst.add(parseBinaryOp(MIPSOp.MUL, null, irInst.operands));
 				parseBinaryOp(parsedInst, MIPSOp.MUL, null, irInst.operands);
 				break;
 
 			case DIV:
-				// TODO: Can check if last operand is a power of 2 and
-				// 			replace DIV with SLL
-				// parsedInst.add(parseBinaryOp(MIPSOp.DIV, null, irInst.operands));
+				// TODO (optional): Can check if last operand is a power of 2 and replace DIV with SLL
 				parseBinaryOp(parsedInst, MIPSOp.DIV, null, irInst.operands);
 				break;
 			
 			case AND:
-				// parsedInst.add(parseBinaryOp(MIPSOp.AND, MIPSOp.ANDI, irInst.operands));
 				parseBinaryOp(parsedInst, MIPSOp.AND, MIPSOp.ANDI, irInst.operands);
 				break;
 			
 			case OR:
-				// parsedInst.add(parseBinaryOp(MIPSOp.OR, MIPSOp.ORI, irInst.operands));
 				parseBinaryOp(parsedInst, MIPSOp.OR, MIPSOp.ORI, irInst.operands);
 				break;
 			
 			case BREQ:	// breq, Label, Rs, Rt --> BEQ Rs, Rt, Label
-/*
-				mipsOperands = new MIPSOperand[3];
-				op = MIPSOp.BEQ;
-				// IROperand brLabel = irInst.operands[0]; // if (o instanceof IRLabelOperand)
-				MIPSOperand branchTarget = null;
-				String branchTargetName = new String(irInst.operands[0].toString() + "_" + parentName);
-				if (labelMap.containsKey(branchTargetName)) {
-					branchTarget = labelMap.get(branchTargetName);
-				} else if (labelMap.containsKey(irInst.operands[0].toString())) {
-					branchTarget = labelMap.get(irInst.operands[0].toString());
-				} else {
-					branchTarget = new Addr(branchTargetName);
-					labelMap.put(branchTargetName, branchTarget);
-				}
-
-				mipsOperands[2] = branchTarget;
-				IROperand brRs = irInst.operands[1];
-				if (brRs instanceof IRConstantOperand) {
-					if (brRs.type instanceof IRIntType) {
-						mipsOperands[0] = new Imm(brRs.toString(), "DEC");
-					} else {
-						mipsOperands[0] = new Imm(brRs.toString(), "?");
-					}
-				} else {
-					mipsOperands[0] = getMappedReg(brRs.toString());
-				}
-				IROperand brRt = irInst.operands[2];
-				if (brRt instanceof IRConstantOperand) {
-					if (brRt.type instanceof IRIntType) {
-						mipsOperands[1] = new Imm(brRt.toString(), "DEC");
-					} else {
-						mipsOperands[1] = new Imm(brRt.toString(), "?");
-					}
-				} else {
-					mipsOperands[1] = getMappedReg(brRt.toString());
-				}
-				parsedInst.add(new MIPSInstruction(op, label, mipsOperands));
-*/
-				// parsedInst.addAll(parseBranch(MIPSOp.BEQ, null, irInst.operands));
 				parsedInst.add(parseBranch(MIPSOp.BEQ, irInst.operands)); //, parentName));
 				break;
 			
@@ -681,8 +635,6 @@ public class Selector {
 				parsedInst.add(new MIPSInstruction(MIPSOp.MOVE, null, 
 						regs.get("$v0"), 
 						getMappedReg(irInst.operands[0].toString())));
-				//// jr $ra
-				// parsedInst.add(new MIPSInstruction(MIPSOp.JR, null, regs.get("$ra")));
 				break;
 			
 			case CALL:
@@ -690,145 +642,26 @@ public class Selector {
 				if (Arrays.asList(intrinsicFunctions).contains(subroutineName)) {
 					parsedInst.addAll(parseIntrinsicFunction(subroutineName, irInst.operands));
 				} else {
-					// parseUserFunction(parsedInst, irInst.operands, IRInstruction.OpCode.CALL);
 					parseUserFunction(subroutineName, parsedInst, irInst.operands, (Register) null);
 				}
-				break;			
+				break;	
+
 			case CALLR:
 				subroutineName = ((IRFunctionOperand) irInst.operands[1]).getName();
 				if (Arrays.asList(intrinsicFunctions).contains(subroutineName)) {
 					parsedInst.addAll(parseIntrinsicFunction(subroutineName, irInst.operands));
 				} else {
 					Register destination = getMappedReg(irInst.operands[0].toString());
-					// parseUserFunction(parsedInst, irInst.operands, IRInstruction.OpCode.CALLR);
 					parseUserFunction(subroutineName, parsedInst, irInst.operands, destination);
 				}
-
 				break;
 			
 			case ARRAY_STORE:	//// array_store, a, arr, 0  -->  arr[0] := a
-				//// operands[0] is the value (of same element type as the array) to store
-				//// operands[1] is the array name
-				//// operands[2] is the integer offset into the array
-				String arrName = irInst.operands[1].toString();  //((IRArrayType) ((IRVariableOperand) irInst.operands[0]).type).name;
-				MIPSArray arrOperand = processedArrays.get(arrName);
-				String arrStartRegName = arrName + "Base";
-				Register arrStartReg = getMappedReg(arrStartRegName);
-
-				//// "la arrayBase, -128($fp)"  <--  arrayBase will now point to array[0]
-				parsedInst.add(new MIPSInstruction(MIPSOp.LA, null, 
-						arrStartReg,
-						arrOperand.start));
-
-				String offsetIntoArrRegName = null;
-				Register offsetIntoArrReg = null;
-				if (irInst.operands[2] instanceof IRConstantOperand) {
-					//// If offset value is constant, need to store its value into a register (using load immediate instruction)
-					MIPSOperand offsetIntoArr = new Imm(String.valueOf(((IRConstantOperand) 
-							irInst.operands[2]).getValueString()));
-					offsetIntoArrRegName = arrName + "StoreOffset";
-					offsetIntoArrReg = getMappedReg(offsetIntoArrRegName);
-					parsedInst.add(new MIPSInstruction(MIPSOp.LI, null,
-						offsetIntoArrReg,
-						offsetIntoArr));
-				} else {
-					offsetIntoArrRegName = irInst.operands[2].toString(); // + "StoreOffset";
-					offsetIntoArrReg = getMappedReg(offsetIntoArrRegName);
-				}
-				
-				String shiftedOffsetName = offsetIntoArrRegName + "Shifted";
-				Register shiftedOffsetReg = getMappedReg(shiftedOffsetName);
-
-				//// Left shift offset value by 2 to reach a word boundary (same as 4 * offset)
-				parsedInst.add(new MIPSInstruction(MIPSOp.SLL, null,
-						// offsetIntoArrReg,	//// <-- Causes issues when future instructions try to reuse value
-						shiftedOffsetReg,
-						offsetIntoArrReg,
-						TWO));
-
-				//// Add word offset to the array's base address
-				parsedInst.add(new MIPSInstruction(MIPSOp.ADD, null,
-				// parsedInst.add(new MIPSInstruction(MIPSOp.SUB, null,
-						arrStartReg,
-						arrStartReg,
-						// offsetIntoArrReg));
-						shiftedOffsetReg));
-
-				//// Finally, store the desired value into (arrayBase + wordOffset)
-				// MIPSOperand valToStore = null;
-				Register valToStoreReg = null;
-				if (irInst.operands[0] instanceof IRConstantOperand) {
-					//// If value is constant, need to store its value into a register (using load immediate instruction)
-					Imm valToStore = new Imm(String.valueOf(((IRConstantOperand) 
-							irInst.operands[0]).getValueString()));
-					String valToStoreRegName = arrName + "ValueToStore";
-					valToStoreReg = getMappedReg(valToStoreRegName);
-					parsedInst.add(new MIPSInstruction(MIPSOp.LI, null,
-							valToStoreReg,
-							valToStore));
-				} else {
-					valToStoreReg = getMappedReg(irInst.operands[0].toString());
-				}
-				parsedInst.add(new MIPSInstruction(MIPSOp.SW, null,
-						valToStoreReg,
-						new Addr(arrStartReg)));
-
+				parseArrayOp(parsedInst, irInst.operands, false);
 				break;
 			
 			case ARRAY_LOAD:	//// array_load, a, arr, 0  -->  a := arr[0]
-				//// operands[0] is the destination register (must be a variable)
-				//// operands[1] is the array name
-				//// operands[2] is the integer offset into the array
-				arrName = irInst.operands[1].toString();  //((IRArrayType) ((IRVariableOperand) irInst.operands[0]).type).name;
-				arrOperand = processedArrays.get(arrName);
-				arrStartRegName = arrName + "Base";
-				arrStartReg = getMappedReg(arrStartRegName);
-
-				//// "la arrayBase, -128($fp)"  <--  arrayBase will now point to array[0]
-				parsedInst.add(new MIPSInstruction(MIPSOp.LA, null, 
-						arrStartReg,
-						arrOperand.start));
-
-				offsetIntoArrRegName = null;
-				offsetIntoArrReg = null;
-				if (irInst.operands[2] instanceof IRConstantOperand) {
-					//// If offset value is constant, need to store its value into a register (using load immediate instruction)
-					MIPSOperand offsetIntoArr = new Imm(String.valueOf(((IRConstantOperand) 
-							irInst.operands[2]).getValueString()));
-					offsetIntoArrRegName = arrName + "LoadOffset";
-					offsetIntoArrReg = getMappedReg(offsetIntoArrRegName);
-					parsedInst.add(new MIPSInstruction(MIPSOp.LI, null,
-						offsetIntoArrReg,
-						offsetIntoArr));
-				} else {
-					offsetIntoArrRegName = irInst.operands[2].toString(); // + "LoadOffset";
-					offsetIntoArrReg = getMappedReg(offsetIntoArrRegName);
-				}
-
-				shiftedOffsetName = offsetIntoArrRegName + "Shifted";
-				shiftedOffsetReg = getMappedReg(shiftedOffsetName);
-				
-				//// Left shift offset value by 2 to reach a word boundary (same as 4 * offset)
-				parsedInst.add(new MIPSInstruction(MIPSOp.SLL, null,
-						// offsetIntoArrReg,
-						shiftedOffsetReg,
-						offsetIntoArrReg,
-						TWO));
-
-				//// Sub word offset relative to the array's base address
-				// parsedInst.add(new MIPSInstruction(MIPSOp.SUB, null,
-				parsedInst.add(new MIPSInstruction(MIPSOp.ADD, null,
-						arrStartReg,
-						arrStartReg,
-						// offsetIntoArrReg));
-						shiftedOffsetReg));
-
-				//// Finally, load the memory contents of (arrayBase + wordOffset) into destination register
-				Register destination = getMappedReg(irInst.operands[0].toString());
-				parsedInst.add(new MIPSInstruction(MIPSOp.LW, null,
-						destination,
-						new Addr(arrStartReg)));
-				
+				parseArrayOp(parsedInst, irInst.operands, true);
 				break;
 			
 			default:
@@ -1051,16 +884,6 @@ public class Selector {
 		return parsedFunc;
 	}
 
-/*
-	private void parseUserFunction(List<MIPSInstruction> parsedInst, IROperand[] operands,
-																			MIPSOp op) {
-		String subroutineName = op == MIPSOp.CALL 
-								? ((IRFunctionOperand) operands[0]).getName()
-								: ((IRFunctionOperand) operands[1]).getName();
-		Register destination = op == MIPSOp.CALLR
-								? getMappedReg(operands[0].toString())
-								: null;	
-*/
 	private void parseUserFunction(String subroutineName, List<MIPSInstruction> parsedInst, 
 												IROperand[] operands, Register destination) {
 
@@ -1196,23 +1019,83 @@ public class Selector {
 		}
 	}
 
-/*
-	public List<MIPSInstruction> parseCall(IRInstruction call) {
-		List<MIPSInstruction> parsedInst = new LinkedList<>();
+	public void parseArrayOp(List<MIPSInstruction> parsedInst, 
+							IROperand[] operands, boolean isLoad) {
+		//// array_load/_store, a, arr, 0  -->  a := arr[0] / arr[0] := a
+		//// operands[0] is the destination register (must be a variable)
+		//// operands[1] is the array name
+		//// operands[2] is the integer offset into the array
+		String arrName = operands[1].toString();  //((IRArrayType) ((IRVariableOperand) irInst.operands[0]).type).name;
+		MIPSArray arrOperand = processedArrays.get(arrName);
+		String arrStartRegName = arrName + "Base";
+		Register arrStartReg = getMappedReg(arrStartRegName);
 
-		//// Load parameters for the function call ("addi $sp, $sp, stackSpace")
-		int stackSpace = call.operands.size() * -4;	// Correct? (likely not...)
-		parsedInst.add(new MIPSInstruction(ADDI, null, 
-				regs.get("$sp"), regs.get("$sp")
-				new Imm(String.valueOf(stackSpace), "DEC")));
+		//// "la arrayBase, -128($fp)"  <--  arrayBase will now point to array[0]
+		parsedInst.add(new MIPSInstruction(MIPSOp.LA, null, 
+				arrStartReg,
+				arrOperand.start));
 
-		//// Save return address $ra in stack ("sw $ra, 0($sp)")
-		parsedInst.add(new MIPSInstruction(SW, null, 
-			regs.get("$ra"),
-			new Addr(regs.get("$ra"))));
+		String offsetIntoArrRegName = null;
+		Register offsetIntoArrReg = null;
+		String suffix = isLoad ? "LoadOffset" : "StoreOffset";
+		if (operands[2] instanceof IRConstantOperand) {
+			//// If offset value is constant, need to store its value into a register (using load immediate instruction)
+			MIPSOperand offsetIntoArr = new Imm(String.valueOf(((IRConstantOperand) 
+					operands[2]).getValueString()));
+			offsetIntoArrRegName = arrName + suffix;
+			offsetIntoArrReg = getMappedReg(offsetIntoArrRegName);
+			parsedInst.add(new MIPSInstruction(MIPSOp.LI, null,
+				offsetIntoArrReg,
+				offsetIntoArr));
+		} else {
+			offsetIntoArrRegName = operands[2].toString(); // + suffix;
+			offsetIntoArrReg = getMappedReg(offsetIntoArrRegName);
+		}
+
+		String shiftedOffsetName = offsetIntoArrRegName + "Shifted";
+		Register shiftedOffsetReg = getMappedReg(shiftedOffsetName);
 		
+		//// Left shift offset value by 2 to reach a word boundary (same as 4 * offset)
+		parsedInst.add(new MIPSInstruction(MIPSOp.SLL, null,
+				// offsetIntoArrReg,	//// <-- Causes issues when future instructions try to reuse value
+				shiftedOffsetReg,
+				offsetIntoArrReg,
+				TWO));
+
+		//// Add word offset relative to the array's base address
+		parsedInst.add(new MIPSInstruction(MIPSOp.ADD, null,
+				arrStartReg,
+				arrStartReg,
+				shiftedOffsetReg));		// offsetIntoArrReg));
+
+		//// Finally...
+		if (isLoad) {
+			//// Load the memory contents of (arrayBase + wordOffset) into destination register
+			Register destination = getMappedReg(operands[0].toString());
+			parsedInst.add(new MIPSInstruction(MIPSOp.LW, null,
+					destination,
+					new Addr(arrStartReg)));
+		} else {
+			//// Store the desired value into (arrayBase + wordOffset)
+			Register valToStoreReg = null;
+			if (operands[0] instanceof IRConstantOperand) {
+				//// If value is constant, need to store its value into a register (using load immediate instruction)
+				Imm valToStore = new Imm(String.valueOf(((IRConstantOperand) 
+						operands[0]).getValueString()));
+				String valToStoreRegName = arrName + "ValueToStore";
+				valToStoreReg = getMappedReg(valToStoreRegName);
+				parsedInst.add(new MIPSInstruction(MIPSOp.LI, null,
+						valToStoreReg,
+						valToStore));
+			} else {
+				valToStoreReg = getMappedReg(operands[0].toString());
+			}
+
+			parsedInst.add(new MIPSInstruction(MIPSOp.SW, null,
+					valToStoreReg,
+					new Addr(arrStartReg)));
+		}
 	}
-*/
 
 
 	//// These instructions needed before any function call
