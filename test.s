@@ -1,9 +1,12 @@
 .text
 main: 
     move $fp, $sp
+    # Start of prologue
     li $t10main, 0
     li $t11main, 0
     li $t12main, 0
+    addi $sp, $sp, -96
+    # End of prologue
     li $t10main, 11
     addi $t10main, $t10main, 2
     add $t11main, $t10main, $t10main
@@ -134,26 +137,17 @@ print_main:
     syscall
 FIN_main: 
     # Saving temporary regs
-    addi $sp, $sp, -4
-    sw $t0, 0($sp)
-    addi $sp, $sp, -4
-    sw $t1, 0($sp)
-    addi $sp, $sp, -4
-    sw $t2, 0($sp)
-    addi $sp, $sp, -4
-    sw $t3, 0($sp)
-    addi $sp, $sp, -4
-    sw $t4, 0($sp)
-    addi $sp, $sp, -4
-    sw $t5, 0($sp)
-    addi $sp, $sp, -4
-    sw $t6, 0($sp)
-    addi $sp, $sp, -4
-    sw $t7, 0($sp)
-    addi $sp, $sp, -4
-    sw $t8, 0($sp)
-    addi $sp, $sp, -4
-    sw $t9, 0($sp)
+    sw $t0, -4($fp)
+    sw $t1, -8($fp)
+    sw $t2, -12($fp)
+    sw $t3, -16($fp)
+    sw $t4, -20($fp)
+    sw $t5, -24($fp)
+    sw $t6, -28($fp)
+    sw $t7, -32($fp)
+    sw $t8, -36($fp)
+    sw $t9, -40($fp)
+    # Save return address $ra in stack
     addi $sp, $sp, -4
     sw $ra, 0($sp)
     # Pushing function call args onto stack
@@ -169,29 +163,20 @@ FIN_main:
     sw $t9, 0($sp)
     # Calling subroutine 'routine'
     jal routine
+    addi $sp, $sp, 20
     lw $ra, 0($sp)
     addi $sp, $sp, 4
     # Restoring temporary regs
-    lw $t9, 0($sp)
-    addi $sp, $sp, 4
-    lw $t8, 0($sp)
-    addi $sp, $sp, 4
-    lw $t7, 0($sp)
-    addi $sp, $sp, 4
-    lw $t6, 0($sp)
-    addi $sp, $sp, 4
-    lw $t5, 0($sp)
-    addi $sp, $sp, 4
-    lw $t4, 0($sp)
-    addi $sp, $sp, 4
-    lw $t3, 0($sp)
-    addi $sp, $sp, 4
-    lw $t2, 0($sp)
-    addi $sp, $sp, 4
-    lw $t1, 0($sp)
-    addi $sp, $sp, 4
-    lw $t0, 0($sp)
-    addi $sp, $sp, 4
+    lw $t9, -40($fp)
+    lw $t8, -36($fp)
+    lw $t7, -32($fp)
+    lw $t6, -28($fp)
+    lw $t5, -24($fp)
+    lw $t4, -20($fp)
+    lw $t3, -16($fp)
+    lw $t2, -12($fp)
+    lw $t1, -8($fp)
+    lw $t0, -4($fp)
     # print_char
     li $v0, 11
     li $a0, 10
@@ -220,6 +205,9 @@ FIN_main:
     li $v0, 11
     li $a0, 10
     syscall
+    # Start of epilogue
+    addi $sp, $sp, 96
+    # End of epilogue
     # Program exit
     li $v0, 10
     syscall
@@ -227,17 +215,15 @@ FIN_main:
 
 routine: 
     move $fp, $sp
+    # Start of prologue
+    addi $sp, $sp, -64
     # Fetch arguments from stack & collapse
-    lw $t9, 0($sp)
-    addi $sp, $sp, 4
-    lw $t8, 0($sp)
-    addi $sp, $sp, 4
-    lw $t7, 0($sp)
-    addi $sp, $sp, 4
-    lw $t6, 0($sp)
-    addi $sp, $sp, 4
-    lw $t5, 0($sp)
-    addi $sp, $sp, 4
+    lw $t7, 64($sp)
+    lw $t9, 68($sp)
+    lw $t8, 72($sp)
+    lw $t6, 76($sp)
+    lw $t5, 80($sp)
+    # End of prologue
     # print_char
     li $v0, 11
     li $a0, 10
@@ -272,14 +258,6 @@ routine:
     syscall
     # print_int
     li $v0, 1
-    move $a0, $t7
-    syscall
-    # print_char
-    li $v0, 11
-    li $a0, 10
-    syscall
-    # print_int
-    li $v0, 1
     move $a0, $t8
     syscall
     # print_char
@@ -294,6 +272,17 @@ routine:
     li $v0, 11
     li $a0, 10
     syscall
+    # print_int
+    li $v0, 1
+    move $a0, $t7
+    syscall
+    # print_char
+    li $v0, 11
+    li $a0, 10
+    syscall
+    # Start of epilogue
+    addi $sp, $sp, 64
+    # End of epilogue
     # Return from subroutine routine
     jr $ra
 

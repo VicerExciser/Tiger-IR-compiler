@@ -44,7 +44,17 @@ public class Selector {
 	private static int tNum = 10;
 	private static int aNum = 4;
 
+	private int FP_OFFSET_T0 = -4;
+	private int FP_OFFSET_T9 = -40;
+	private Imm ZERO;
+
+	private boolean SAVE_RESTORE_FROM_FP = false;
+	private Imm posTempRegSpace;
+	private Imm negTempRegSpace;
+
 	private String[] tempRegNames = {"$t0", "$t1", "$t2", "$t3", "$t4", "$t5", "$t6", "$t7", "$t8", "$t9"};
+	private Map<String, Addr> tempRegFrameOffsets;
+	private Map<String, Addr[]> tempRegOffsets;
 	private String[] argRegNames = {"$a0", "$a1", "$a2", "$a3"};
 	private String[] intrinsicFunctions = {"geti", "getf", "getc", "puti", "putf", "putc"};
 	private Map<String, Imm> systemServiceCodes;
@@ -57,12 +67,40 @@ public class Selector {
 		processedFunctions = new LinkedList<>();
 		curFunction = null;
 
-		initializeRegisters();
-		initializeSystemServices();
-
-		stackPointer = new Addr(new Imm("0"), regs.get("$sp"));
+		ZERO = new Imm("0");
 		wordSize = new Imm("4");
 		negWordSize = new Imm("-4");
+		posTempRegSpace = new Imm("40");
+		negTempRegSpace = new Imm("-40");
+
+		initializeRegisters();
+
+		if (SAVE_RESTORE_FROM_FP) {
+			tempRegFrameOffsets = new HashMap<>();
+			int fpOffset = -4;
+			for (String name : tempRegNames) {
+				Addr offset = new Addr(new Imm(String.valueOf(fpOffset)), regs.get("$fp"));
+				tempRegFrameOffsets.put(name, offset);
+				fpOffset -= 4;
+			}
+			if (fpOffset != -40 && fpOffset != -44) {
+				System.out.println("[Selector] Error occurred while initializing tempRegFrameOffsets:  fpOffset = " + String.valueOf(fpOffset));
+			}
+		} else {
+			tempRegOffsets = new HashMap<>();
+			int spOffset = 0;
+			for (String name : tempRegNames) {
+				Addr[] offsets = new Addr[]{
+						new Addr(new Imm(String.valueOf(spOffset*(-1))), regs.get("$sp")),
+						new Addr(new Imm(String.valueOf(spOffset)), regs.get("$sp"))};
+				tempRegOffsets.put(name, offsets);
+				spOffset += 4;
+			}
+		}
+
+		initializeSystemServices();
+
+		stackPointer = new Addr(ZERO, regs.get("$sp"));
 	}
 
 	private String findUnusedRegName() {
@@ -100,6 +138,10 @@ public class Selector {
 			associatedRegName = findUnusedRegName();
 			if (associatedRegName != null) {
 				curFunction.irToMipsRegMap.put(operand, associatedRegName);
+
+				//// UPDATE (4/22/20): mips-interpreter sometimes fails due to uninitialized registers; here's a dumb fix:
+				// curFunction.instructions.add(new MIPSInstruction(MIPSOp.LI, null, regs.get(associatedRegName), ZERO));
+
 			}
 		}
 
@@ -112,7 +154,7 @@ public class Selector {
 				associatedRegName = virtualRegName;
 
 				//// Need to initialize virtual registers before they can be used
-				curFunction.instructions.add(new MIPSInstruction(MIPSOp.LI, null, regs.get(virtualRegName), new Imm("0")));
+				curFunction.instructions.add(new MIPSInstruction(MIPSOp.LI, null, regs.get(virtualRegName), ZERO));
 			} else {
 				System.out.println("[getMappedReg] ERROR: Could not assign a temporary register to operand '"+operand+"'");
 				return null;
@@ -170,15 +212,89 @@ public class Selector {
 		//// Generate function name label as first instruction
         mipsFunction.instructions.add(0, new MIPSInstruction(MIPSOp.LABEL, 
         		irFunction.name, (MIPSOperand[]) null));
+
+//---------------------------------------------------------------------------------------------------
+
+        mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.COMMENT, 
+					"Start of prologue", 
+					(MIPSOperand) null));
+
+        /* Stack Frame Prologue Step #1: Set up current frame pointer (copy $sp to $fp) */
         //// Generate first true instruction ("move $fp, $sp")
         mipsFunction.instructions.add(1, new MIPSInstruction(MIPSOp.MOVE, null, 
         		regs.get("$fp"), regs.get("$sp")));
 
-		if (irFunction.returnType != null) {
-			mipsFunction.returnType = irFunction.returnType.toString();
+
+
+		//// UPDATE (4/22/20): mips-interpreter sometimes fails due to uninitialized registers; here's a dumb fix:
+        if ("main".equalsIgnoreCase(mipsFunction.name)) {
+	        for (String regName : tempRegNames) {
+				curFunction.instructions.add(new MIPSInstruction(MIPSOp.LI, null, 
+						regs.get(regName), ZERO));
+			}
 		}
 
+		
+        int stackFrameSize = 0;
 
+//---------------------------------------------------------------------------------------------------
+
+		/* Stack Frame Prologue Step #2: Allocate sufficient space for the Local Data Storage Section */
+		int local_data_size = 10;	//// Includes space for all 10 temporary regs, so always at least 10 words in size
+//// FIXME
+		if (!irFunction.variables.isEmpty()) {
+			for (IRVariableOperand irVar : irFunction.variables) {
+
+				/// TODO: Check if is IRArrayType!!
+
+				MIPSOperand mipsVar = getMappedReg(irVar.toString());
+				mipsFunction.variables.add(mipsVar);
+				local_data_size++;
+			}
+		}
+
+		stackFrameSize += (local_data_size * 4);
+
+//---------------------------------------------------------------------------------------------------
+
+		/* Stack Frame Prologue Step #3: Ensure the Local Data Segment ends on a double word boundary by inserting a Pad */
+		while (stackFrameSize % 8 != 0) {
+			stackFrameSize += 4;
+		}
+
+//---------------------------------------------------------------------------------------------------
+
+		/* Stack Frame Prologue Step #4: Calculate size of Arguments Section (max # of args passed to any subroutine to be called) */
+/*
+		int argumentsSize = 4;		//// Minimum size is 4
+		int maxArgsInCall = 0;
+		for (IRInstruction inst : irFunction.instructions) {
+			int numArgs = 0;
+			if (inst.opCode == CALL) {
+				numArgs = inst.operands.length - 1;
+			} else if (inst.opCode == CALLR) {
+				numArgs = inst.operands.length - 2;
+			}
+
+			if (numArgs > maxArgsInCall) {
+				maxArgsInCall = numArgs;
+			}
+		}
+		argumentsSize += maxArgsInCall;
+		stackFrameSize += argumentsSize;
+*/
+
+		// mipsFunction.frameSize += (local_data_size * 4);
+		mipsFunction.frameSize = stackFrameSize;
+		mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.ADDI, null,
+				regs.get("$sp"), 
+				regs.get("$sp"),
+				// new Imm(String.valueOf(local_data_size * -4))));
+				new Imm(String.valueOf(stackFrameSize * -1))));
+
+
+//// FIXME
+//// FIXME
 		if (!irFunction.parameters.isEmpty()) {
 			mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.COMMENT, 
 					"Fetch arguments from stack & collapse", 
@@ -189,15 +305,19 @@ public class Selector {
 					"addi $sp, $sp, -104"
 				^ UPDATE: Caller should probs do this
 			*/
+
 			// int stackSpace = 0;
+			int argOffset = stackFrameSize;  // 8;
+
 			List<IRVariableOperand> irParamsReversed = new LinkedList<>(irFunction.parameters);
 			Collections.reverse(irParamsReversed);
 			// for (IRVariableOperand irParam : irFunction.parameters) {
 			for (IRVariableOperand irParam : irParamsReversed) {
-				// MIPSOperand mipsParam = getArgumentReg(irParam.toString());
-				MIPSOperand mipsParam = getMappedReg(irParam.toString());
+				MIPSOperand mipsParam = getArgumentReg(irParam.toString());
+				// MIPSOperand mipsParam = getMappedReg(irParam.toString());
 				mipsFunction.parameters.add(mipsParam);
 
+/*
 				//// Stack pointer should initially currently pointing to the last argument
 				//// lw $t_, 0($sp)
 				mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.LW, null,
@@ -209,6 +329,15 @@ public class Selector {
 						regs.get("$sp"), 
 						regs.get("$sp"),
 						wordSize));
+*/
+
+
+				//// UPDATE (4/22/20): Stack pointer should initially be pointing to $fp; sp+4 = $ra; sp+8 = arg0
+				mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.LW, null,
+						mipsParam,
+						new Addr(new Imm(String.valueOf(argOffset)), regs.get("$sp"))));
+
+				argOffset += 4;
 				
 				// stackSpace -= 4;	// Is this correct???
 			}
@@ -216,16 +345,21 @@ public class Selector {
 			// 		regs.get("$sp"), regs.get("$sp"),
 			// 		new Imm(String.valueOf(stackSpace))));
 		}
+//// FIXME
 
+//---------------------------------------------------------------------------------------------------
 
-		if (!irFunction.variables.isEmpty()) {
-			for (IRVariableOperand irVar : irFunction.variables) {
-				MIPSOperand mipsVar = getMappedReg(irVar.toString());
-				mipsFunction.variables.add(mipsVar);
-			}
+		if (irFunction.returnType != null) {
+			mipsFunction.returnType = irFunction.returnType.toString();
 		}
 
+		mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.COMMENT, 
+					"End of prologue", 
+					(MIPSOperand) null));
 
+//---------------------------------------------------------------------------------------------------
+
+		//// Now, translate each IR instruction into MIPS counterpart(s)
 		for (IRInstruction irInst : irFunction.instructions) {
 			List<MIPSInstruction> parsedInst = parseInstruction(irInst, irFunction.name);
 			// for (MIPSInstruction mipsInst : parsedInst) {
@@ -233,6 +367,25 @@ public class Selector {
 			// }
 			mipsFunction.instructions.addAll(parsedInst);
 		}
+
+//---------------------------------------------------------------------------------------------------
+
+		mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.COMMENT, 
+					"Start of epilogue", 
+					(MIPSOperand) null));
+//// FIXME
+		//// Collapse the stack
+		mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.ADDI, null,
+				regs.get("$sp"), 
+				regs.get("$sp"),
+				// new Imm(String.valueOf(local_data_size * 4))));
+				new Imm(String.valueOf(stackFrameSize))));
+//// FIXME
+		mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.COMMENT, 
+					"End of epilogue", 
+					(MIPSOperand) null));
+
+//---------------------------------------------------------------------------------------------------
 
 		//// If not main function, append a return ("jr $ra") instruction at the end
 		if (!"main".equalsIgnoreCase(mipsFunction.name)) {
@@ -269,6 +422,9 @@ public class Selector {
 				break;
 
 			case ASSIGN:
+
+			//// TODO: CHECK IF AN ARRAY ASSIGNMENT && HANDLE ACCORDINGLY!!!
+
 				// TODO: Use MOVE instead of ADD (keep ADDI for constant operands)
 				// operand[0] will be a register/variable,
 				// operand[1] will be either a var or constant
@@ -434,223 +590,34 @@ public class Selector {
 				break;
 			
 			case RETURN:
+				parsedInst.add(new MIPSInstruction(MIPSOp.COMMENT, 
+					"Store return value in $v0 and return", 
+					(MIPSOperand) null));
+				//// Store return value in $v0 (if applicable)
+				parsedInst.add(new MIPSInstruction(MIPSOp.MOVE, null, 
+						regs.get("$v0"), 
+						getMappedReg(irInst.operands[0].toString())));
 				//// jr $ra
-				parsedInst.add(new MIPSInstruction(MIPSOp.JR, null, regs.get("$ra")));
+				// parsedInst.add(new MIPSInstruction(MIPSOp.JR, null, regs.get("$ra")));
 				break;
 			
 			case CALL:
 				String subroutineName = ((IRFunctionOperand) irInst.operands[0]).getName();
-
 				if (Arrays.asList(intrinsicFunctions).contains(subroutineName)) {
 					parsedInst.addAll(parseIntrinsicFunction(subroutineName, irInst.operands));
 				} else {
-					// Addr stackPointer = new Addr(new Imm("0"), regs.get("$sp"));
-					// Imm wordSize = new Imm("-4");
-
-					//// Preserve contents of $t0..$t9 on the stack
-					saveTempRegs(parsedInst);
-
-					//// Save return address $ra in stack ("sw $ra, 0($sp)")
-					parsedInst.add(new MIPSInstruction(MIPSOp.COMMENT, 
-							"Save return address $ra in stack", 
-							(MIPSOperand) null));
-					parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
-							regs.get("$sp"), 
-							regs.get("$sp"),
-							negWordSize));
-					parsedInst.add(new MIPSInstruction(MIPSOp.SW, null, 
-							regs.get("$ra"), 
-							stackPointer));
-
-					//// Load parameters for the function call ("addi $sp, $sp, stackSpace")
-					int stackSpace = 0; // = (irInst.operands.length/*-1*/) * (-4);	// Correct? (likely not...)
-					// parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
-					// 		regs.get("$sp"), regs.get("$sp"),
-					// 		new Imm(String.valueOf(stackSpace))));
-					// for (IRVariableOperand param : irInst.operands) {
-
-					//// TODO: FIX ME!
-					//// Push all arguments onto the stack
-					parsedInst.add(new MIPSInstruction(MIPSOp.COMMENT, 
-							"Pushing function call args onto stack", 
-							(MIPSOperand) null));
-					for (int idx = 1; idx < irInst.operands.length; idx++) {
-						parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
-								regs.get("$sp"), 
-								regs.get("$sp"),
-								negWordSize));
-						stackSpace -= 4;
-						MIPSOperand arg = null;
-						IROperand param = irInst.operands[idx];
-						if (param instanceof IRVariableOperand) {
-							arg = getMappedReg(param.toString());
-							if (arg == null || ((Register) arg).name.contains(curFunction.name)) {
-								arg = getArgumentReg(param.toString());
-							}
-						// } else if (param instanceof IRConstantOperand) {
-						// 	arg = new Imm(param.toString());
-						} else {
-							// arg = new Addr(param.toString());	// prolly invalid
-							System.out.println("[CALL] ERROR: Invalid function argument type");
-						}
-						parsedInst.add(new MIPSInstruction(MIPSOp.SW, null,
-								arg, stackPointer));
-					}
-					
-
-					//// Jump and link to the function ("jal functionName")
-					parsedInst.add(new MIPSInstruction(MIPSOp.COMMENT, 
-							"Calling subroutine '"+subroutineName+"'", 
-							(MIPSOperand) null));
-					Addr labelAddr = null;
-					if (curFunction.labelMap.containsKey(subroutineName)) {
-						labelAddr = curFunction.labelMap.get(subroutineName);
-					} else {
-						for (MIPSFunction func : processedFunctions) {
-							if (subroutineName.equals(func.name)) {
-								labelAddr = new Addr(func.name);
-								curFunction.labelMap.put(func.name, labelAddr);
-								break;
-							}
-						}
-						if (labelAddr == null) {
-							labelAddr = new Addr(subroutineName);
-							curFunction.labelMap.put(subroutineName, labelAddr);
-						}
-					}
-					parsedInst.add(new MIPSInstruction(MIPSOp.JAL, null, labelAddr));
-
-					/* UPDATE: I believe this is done by the callee
-					//// Collapse the stack:
-					parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
-							regs.get("$sp"), regs.get("$sp"),
-							new Imm(String.valueOf(stackSpace))));
-					*/
-
-					//// Restore return address:
-					// parsedInst.add(new MIPSInstruction(MIPSOp.COMMENT, 
-					// 		"Restoring return address", 
-					// 		(MIPSOperand) null));
-					////	"lw $ra, 0($sp)"
-					////	"addi $sp, $sp, 4"
-					parsedInst.add(new MIPSInstruction(MIPSOp.LW, null, 
-							regs.get("$ra"),
-							stackPointer));
-					parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
-							regs.get("$sp"), regs.get("$sp"),
-							// new Imm(String.valueOf(stackSpace))));	// <-- need this???
-							// new Imm("4")));
-							wordSize));
-
-					restoreTempRegs(parsedInst);
-
+					// parseUserFunction(parsedInst, irInst.operands, IRInstruction.OpCode.CALL);
+					parseUserFunction(subroutineName, parsedInst, irInst.operands, (Register) null);
 				}
-
-				break;
-
-				
-
-				/*
-				mipsOperands = new MIPSOperand[2];
-
-				// for (IROperand o : irInst.operands) {
-					// if (o instanceof IRFunctionOperand) {
-				
-				//// Replace intrinsic function calls (geti, putc, etc.) with syscalls
-				switch(subroutineName) {
-
-							
-    // # print integer in $t0
-    // ### Tiger-IR:   call, puti, t0
-    // li $v0, 1   # print int
-    // # li $v0, 11    # print char
-    // move $a0, $t0
-    // syscall
-
-    // ### Tiger-IR:   call, putc, 10
-    // li $v0, 11  # print space
-    // li $a0, 10
-    // syscall
-							
-    				//// TODO: Account for function calls with non-int/char params & more than 1 param
-    				// case "putf":
-					case "puti":
-    					//// li $v0, 1   # print int    
-						// mipsOperands = {regs.get("$v0"), new Imm("1", "DEC")};
-						parsedInst.add(new MIPSInstruction(MIPSOp.LI, null, regs.get("$v0"), new Imm("1")));
-						//// move $a0, intToPrint
-						String intToPrint = irInst.operands[1].toString();
-						mipsOperands[0] = regs.get("$a0");
-						if (irInst.operands[1] instanceof IRConstantOperand) {
-							mipsOperands[1] = new Imm(intToPrint);
-						} else { //if (irInst.operands[1] instanceof IRVariableOperand) {
-							mipsOperands[1] = getMappedReg(intToPrint);
-						}
-						parsedInst.add(new MIPSInstruction(MIPSOp.MOVE, null, mipsOperands));
-						//// syscall
-						parsedInst.add(new MIPSInstruction(MIPSOp.SYSCALL, null, (MIPSOperand) null));
-						break;
-					case "putc":
-						//// li $v0, 11  # print char
-						// mipsOperands = {regs.get("$v0"), new Imm("11", "DEC")};
-						parsedInst.add(new MIPSInstruction(MIPSOp.LI, null, regs.get("$v0"), new Imm("11")));
-						//// li $a0, charToPrint  # e.g., 10 to print a space character
-						String charToPrint = irInst.operands[1].toString();
-						mipsOperands[0] = regs.get("$a0");
-						if (irInst.operands[1] instanceof IRConstantOperand) {
-							mipsOperands[1] = new Imm(charToPrint);
-						} else { //if (irInst.operands[1] instanceof IRVariableOperand) {
-							mipsOperands[1] = getMappedReg(charToPrint);
-						}
-						parsedInst.add(new MIPSInstruction(MIPSOp.LI, null, mipsOperands));
-						//// syscall
-						parsedInst.add(new MIPSInstruction(MIPSOp.SYSCALL, null, (MIPSOperand) null));
-						break;
-					case "putf":
-						//// TODO
-						break;
-					
-					default:
-						break;
-				}
-				// }
-				// else if (o instanceof IRLabelOperand) {
-				// 	//// Would find existing label or function name in the program
-				// }
-				// }
-
-				break;
-				*/
-			
+				break;			
 			case CALLR:
 				subroutineName = ((IRFunctionOperand) irInst.operands[1]).getName();
 				if (Arrays.asList(intrinsicFunctions).contains(subroutineName)) {
 					parsedInst.addAll(parseIntrinsicFunction(subroutineName, irInst.operands));
 				} else {
-					//// Load parameters for the function call ("addi $sp, $sp, stackSpace")
-					int stackSpace = (irInst.operands.length/*-2*/-1) * (-4);	// Correct? (likely not...)
-					parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
-							regs.get("$sp"), 
-							regs.get("$sp"),
-							new Imm(String.valueOf(stackSpace))));
-
-					//// Save return address $ra in stack ("sw $ra, 0($sp)")
-					parsedInst.add(new MIPSInstruction(MIPSOp.SW, null, 
-							regs.get("$ra"), 
-							new Addr(regs.get("$sp"))));
-
-
-					//// Jump and link to the function ("jal functionName")
-					//// TODO: Check if an intrinsic function; do this ^ if not
-
-					//// Restore return address:
-					////	"lw $ra, 0($sp)"
-					////	"addi $sp, $sp, 4"
-					//// TODO
-
-					//// Jump to $ra ("jr $ra")
-					//// TODO
-
+					/*Register*/ destination = getMappedReg(irInst.operands[0].toString());
+					// parseUserFunction(parsedInst, irInst.operands, IRInstruction.OpCode.CALLR);
+					parseUserFunction(subroutineName, parsedInst, irInst.operands, destination);
 				}
 
 				break;
@@ -872,6 +839,151 @@ public class Selector {
 	}
 
 /*
+	private void parseUserFunction(List<MIPSInstruction> parsedInst, IROperand[] operands,
+																			MIPSOp op) {
+		String subroutineName = op == MIPSOp.CALL 
+								? ((IRFunctionOperand) operands[0]).getName()
+								: ((IRFunctionOperand) operands[1]).getName();
+		Register destination = op == MIPSOp.CALLR
+								? getMappedReg(operands[0].toString())
+								: null;	
+*/
+	private void parseUserFunction(String subroutineName, List<MIPSInstruction> parsedInst, 
+												IROperand[] operands, Register destination) {
+
+		//// Preserve contents of $t0..$t9 on the stack
+		saveTempRegs(parsedInst);
+
+		//// Save current frame pointer $fp in stack ("sw $fp, 0($sp)")
+		// parsedInst.add(new MIPSInstruction(MIPSOp.COMMENT, 
+		// 		"Save return address $ra in stack", 
+		// 		(MIPSOperand) null));
+		// parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
+		// 		regs.get("$sp"), 
+		// 		regs.get("$sp"),
+		// 		negWordSize));
+		// parsedInst.add(new MIPSInstruction(MIPSOp.SW, null, 
+		// 		regs.get("$fp"), 
+		// 		stackPointer));
+
+		//// Save return address $ra in stack ("sw $ra, 0($sp)")
+		// parsedInst.add(new MIPSInstruction(MIPSOp.COMMENT, 
+		// 		"Save return address $ra in stack", 
+		// 		(MIPSOperand) null));
+		parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
+				regs.get("$sp"), 
+				regs.get("$sp"),
+				negWordSize));
+		parsedInst.add(new MIPSInstruction(MIPSOp.SW, null, 
+				regs.get("$ra"), 
+				stackPointer));
+
+		//// Load parameters for the function call ("addi $sp, $sp, stackSpace")
+		int stackSpace = 0; // = (irInst.operands.length/*-1*/) * (-4);	// Correct? (likely not...)
+		
+		//// Push all arguments onto the stack
+		parsedInst.add(new MIPSInstruction(MIPSOp.COMMENT, 
+				"Pushing function call args onto stack", 
+				(MIPSOperand) null));
+
+		int idx = destination == null ? 1 : 2;
+		for (; idx < operands.length; idx++) {
+			parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
+					regs.get("$sp"), 
+					regs.get("$sp"),
+					negWordSize));
+
+			stackSpace += 4;
+			MIPSOperand arg = null;
+			IROperand param = operands[idx];
+			if (param instanceof IRVariableOperand) {
+				arg = getMappedReg(param.toString());
+				if (arg == null || ((Register) arg).name.contains(curFunction.name)) {
+					arg = getArgumentReg(param.toString());
+				}
+			// } else if (param instanceof IRConstantOperand) {
+			// 	arg = new Imm(param.toString());
+			} else {
+				// arg = new Addr(param.toString());	// prolly invalid
+				System.out.println("[CALL] ERROR: Invalid function argument type");
+			}
+			parsedInst.add(new MIPSInstruction(MIPSOp.SW, null,
+					arg, stackPointer));
+		}
+
+		//// Jump and link to the function ("jal functionName")
+		parsedInst.add(new MIPSInstruction(MIPSOp.COMMENT, 
+				"Calling subroutine '"+subroutineName+"'", 
+				(MIPSOperand) null));
+		Addr labelAddr = null;
+		if (curFunction.labelMap.containsKey(subroutineName)) {
+			labelAddr = curFunction.labelMap.get(subroutineName);
+		} else {
+			for (MIPSFunction func : processedFunctions) {
+				if (subroutineName.equals(func.name)) {
+					labelAddr = new Addr(func.name);
+					curFunction.labelMap.put(func.name, labelAddr);
+					break;
+				}
+			}
+			if (labelAddr == null) {
+				labelAddr = new Addr(subroutineName);
+				curFunction.labelMap.put(subroutineName, labelAddr);
+			}
+		}
+		parsedInst.add(new MIPSInstruction(MIPSOp.JAL, null, labelAddr));
+
+		/* UPDATE: I believe this is done by the callee
+		//// Collapse the stack:
+		parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
+				regs.get("$sp"), regs.get("$sp"),
+				new Imm(String.valueOf(stackSpace))));
+		*/
+
+		//// Pop the function call arguments from the stack
+		parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
+				regs.get("$sp"), regs.get("$sp"),
+				new Imm(String.valueOf(stackSpace))));
+
+
+		//// Restore return address
+		// parsedInst.add(new MIPSInstruction(MIPSOp.COMMENT, 
+		// 		"Restoring return address", 
+		// 		(MIPSOperand) null));
+		////	"lw $ra, 0($sp)"
+		////	"addi $sp, $sp, 4"
+		parsedInst.add(new MIPSInstruction(MIPSOp.LW, null, 
+				regs.get("$ra"),
+				stackPointer));
+		parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
+				regs.get("$sp"), regs.get("$sp"),
+				// new Imm(String.valueOf(stackSpace))));	// <-- need this???
+				// new Imm("4")));
+				wordSize));
+
+		//// Restore frame pointer
+		// parsedInst.add(new MIPSInstruction(MIPSOp.LW, null, 
+		// 		regs.get("$fp"),
+		// 		stackPointer));
+		// parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
+		// 		regs.get("$sp"), regs.get("$sp"),
+		// 		wordSize));
+			
+
+		restoreTempRegs(parsedInst);
+
+		//// If CALLR, load result from call (in $v0) into destination register
+		if (destination != null) {
+			parsedInst.add(new MIPSInstruction(MIPSOp.COMMENT, 
+					"Load return value in $v0 into the destination register", 
+					(MIPSOperand) null));
+			parsedInst.add(new MIPSInstruction(MIPSOp.MOVE, null, 
+					destination,
+					regs.get("$v0")));
+		}
+	}
+
+/*
 	public List<MIPSInstruction> parseCall(IRInstruction call) {
 		List<MIPSInstruction> parsedInst = new LinkedList<>();
 
@@ -889,32 +1001,54 @@ public class Selector {
 	}
 */
 
+
 	//// These instructions needed before any function call
 	public void saveTempRegs(List<MIPSInstruction> convention) {
-		// List<MIPSInstruction> convention = new LinkedList<>();
 		convention.add(new MIPSInstruction(MIPSOp.COMMENT, 
 				"Saving temporary regs", 
 				(MIPSOperand) null));
 
-		for (String temp : tempRegNames) {
-			//// addi $sp, $sp, -4
+		if (!SAVE_RESTORE_FROM_FP) {
+			//// addi $sp, $sp, -40
 			convention.add(new MIPSInstruction(MIPSOp.ADDI, null, 
 					regs.get("$sp"), 
 					regs.get("$sp"),
-					negWordSize));
+					negTempRegSpace));
 
-			//// sw $t_, 0($sp)
-			convention.add(new MIPSInstruction(MIPSOp.SW, null,
-					regs.get(temp), 
-					stackPointer));
+			// convention.add(new MIPSInstruction(MIPSOp.SW, null,
+			// 		regs.get(temp), 
+
+			// 		tempRegFrameOffsets.get(temp)));
+		}
+
+		for (String temp : tempRegNames) {
+			if (!SAVE_RESTORE_FROM_FP) {
+				// //// addi $sp, $sp, -4
+				// convention.add(new MIPSInstruction(MIPSOp.ADDI, null, 
+				// 		regs.get("$sp"), 
+				// 		regs.get("$sp"),
+				// 		negWordSize));
+
+				//// sw $t_, 0($sp)
+				convention.add(new MIPSInstruction(MIPSOp.SW, null,
+						regs.get(temp), 
+						// stackPointer));
+						tempRegOffsets.get(temp)[1]));
+			}
+			else {
+				// System.out.println("[saveTempRegs] Saving " + temp + " into " + tempRegFrameOffsets.get(temp).toString());
+				convention.add(new MIPSInstruction(MIPSOp.SW, null,
+						regs.get(temp), 
+						tempRegFrameOffsets.get(temp)));
+			}
+			
 		}
 
 		// return convention;	
 	}
 
 	//// These instructions needed after returning from a function call
-	public void /*List<MIPSInstruction>*/ restoreTempRegs(List<MIPSInstruction> convention) {
-		// List<MIPSInstruction> convention = new LinkedList<>();
+	public void restoreTempRegs(List<MIPSInstruction> convention) {
 		List<String> reversedRegNames = Arrays.asList(tempRegNames);      
       	Collections.reverse(reversedRegNames);
 
@@ -923,19 +1057,35 @@ public class Selector {
 				(MIPSOperand) null));
 
 		for (String temp : reversedRegNames) {
-			//// lw $t_, 0($sp)
-			convention.add(new MIPSInstruction(MIPSOp.LW, null,
-					regs.get(temp),
-					stackPointer));
+			if (!SAVE_RESTORE_FROM_FP) {
+				//// lw $t_, 0($sp)
+				convention.add(new MIPSInstruction(MIPSOp.LW, null,
+						regs.get(temp),
+						// stackPointer));
+						tempRegOffsets.get(temp)[1]));
 
-			//// addi $sp, $sp, 4
+				//// addi $sp, $sp, 4
+				// convention.add(new MIPSInstruction(MIPSOp.ADDI, null, 
+				// 		regs.get("$sp"), 
+				// 		regs.get("$sp"),
+				// 		wordSize));
+			}
+			else {
+				// System.out.println("[restoreTempRegs] Restoring " + temp + " from " + tempRegFrameOffsets.get(temp).toString());
+				convention.add(new MIPSInstruction(MIPSOp.LW, null,
+						regs.get(temp), 
+						tempRegFrameOffsets.get(temp)));
+			}
+			
+		}
+
+		if (!SAVE_RESTORE_FROM_FP) {
+			//// addi $sp, $sp, 40
 			convention.add(new MIPSInstruction(MIPSOp.ADDI, null, 
 					regs.get("$sp"), 
 					regs.get("$sp"),
-					wordSize));
+					posTempRegSpace));
 		}
-
-		// return convention;
 	}
 
 

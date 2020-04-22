@@ -1,0 +1,7 @@
+#start_function
+void main():
+int-list: i
+float-list: f
+	assign, f, 9.99
+	call, putf, f
+#end_function

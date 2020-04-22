@@ -1,0 +1,75 @@
+#start_function
+int add_routine(int arg0, int arg1):
+int-list: res1
+float-list:
+	call, puti, arg0
+    call, putc, 10
+    call, puti, arg1
+    call, putc, 10
+	add, res1, arg0, arg1
+	return, res1
+#end_function
+
+#start_function
+int mult_routine(int arg1, int arg2):
+int-list: res2
+float-list:
+	call, puti, arg1
+    call, putc, 10
+    call, puti, arg2
+    call, putc, 10
+	mult, res2, arg1, arg2
+	return, res2
+#end_function
+
+#start_function
+int div_routine(int arg3, int arg4):
+int-list: res3
+float-list:
+	call, puti, arg3
+    call, putc, 10
+    call, puti, arg4
+    call, putc, 10
+	mult, res3, arg3, arg4
+	return, res3
+#end_function
+
+#start_function
+void main():
+int-list: x, y, z
+float-list:
+	assign, x, 1
+	assign, y, 2
+	callr, z, add_routine, x, y
+	call, puti, z
+    call, putc, 10
+    call, putc, 10
+    call, puti, x
+    call, puti, y
+    call, putc, 10
+    call, putc, 10
+    callr, z, mult_routine, x, y
+	call, puti, z
+    call, putc, 10
+    call, putc, 10
+    call, puti, x
+    call, puti, y
+    call, putc, 10
+    call, putc, 10
+    callr, z, div_routine, y, x
+	call, puti, z
+    call, putc, 10
+    call, putc, 10
+    call, puti, x
+    call, puti, y
+    call, putc, 10
+    call, putc, 10
+    callr, z, add_routine, x, y
+	call, puti, z
+    call, putc, 10
+    call, putc, 10
+    call, puti, x
+    call, puti, y
+    call, putc, 10
+    call, putc, 10
+#end_function

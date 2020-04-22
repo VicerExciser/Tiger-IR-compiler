@@ -11,6 +11,8 @@ import java.util.HashMap;
 
 public class MIPSFunction {
 	
+    // public boolean epilogueHandled;
+    public int frameSize;
 	public String name;
     public String returnType;
 
@@ -32,6 +34,8 @@ public class MIPSFunction {
 						List<MIPSOperand> parameters, 
 						List<MIPSOperand> variables,
 						List<MIPSInstruction> instructions) {
+        // this.epilogueHandled = false;
+        this.frameSize = 0;
         this.name = name;
         this.returnType = returnType;
         this.parameters = parameters;

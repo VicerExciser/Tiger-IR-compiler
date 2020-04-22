@@ -1,31 +1,42 @@
 .text
 main:
+    ## int-list: A[100], n, i, t
   move $fp, $sp
   addi $sp, $sp, -452
+    ## callr, n, geti
   li $v0, 5
   syscall
-  move $t1, $v0
+  move $t1, $v0       ##  $t1 = n
+    ## brgt, return, n, 100
   li $t0, 100
   bgt $t1, $t0, return_main
+    ## sub, n, n, 1
   li $t0, 1
   sub $t1, $t1, $t0
-  li $t4, 0
+    ## assign, i, 0
+  li $t4, 0           ##  $t4 = i
 loop0_main:
+    ## brgt, exit0, i, n
   bgt $t4, $t1, exit0_main
+    ## callr, t, geti
   li $v0, 5
   syscall
-  move $t2, $v0
-  sll $t3, $t4, 2
-  addi $t0, $fp, 0
-  sub $t0, $t0, $t3
+  move $t2, $v0       ##  $t2 = t
+    ## array_store, t, A, i
+  sll $t3, $t4, 2     ##  $t3 = i << 2
+  addi $t0, $fp, 0    ##  $t0 = $fp
+  sub $t0, $t0, $t3   ##  $t0 = $fp - (i << 2)
   sw $t2, ($t0)
+    ## add, i, i, 1
   addi $t4, $t4, 1
+    ## goto, loop0
   j loop0_main
 exit0_main:
+    ## call, quicksort, A, 0, n
   move $a0Quicksort, $fp
-  addi $a0Quicksort, $a0Quicksort, 0
-  li $a1Quicksort, 0
-  move $a2Quicksort, $t1
+  addi $a0Quicksort, $a0Quicksort, 0  ## $a0Quicksort = $fp
+  li $a1Quicksort, 0                  ## $a1Quicksort = 0
+  move $a2Quicksort, $t1              ## $a2Quicksort = n
   addi $sp, $sp, -4
   sw $t1, 0($sp)
   addi $sp, $sp, -8

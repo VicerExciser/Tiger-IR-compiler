@@ -57,8 +57,30 @@ public class Assembler {
 	}
 
 	public void run() throws Exception { //IRException {
+		//// Parse the main function first
+		IRFunction mainFunction = null;
 		for (IRFunction function : inFile.functions) {
+			if ("main".equalsIgnoreCase(function.name)) {
+				mainFunction = function;
+				break;
+			}
+		}
+		if (mainFunction == null || !inFile.functions.remove(mainFunction)) {
+			System.out.println("[ERROR] Assembler could not find a function named 'main' in the IR program!");
+			System.exit(1);
+		}
+		else if (PARSE_BY_FUNCTION) {
+			MIPSFunction newFunction = selector.parseFunction(mainFunction);
+			program.addFunction(newFunction);
+		}
 
+		for (IRFunction function : inFile.functions) {
+			if (function.name.equalsIgnoreCase("main")) {
+				//// Should never occur...
+				System.out.println("-- Assembler failed to remove main function from IR program after processing");
+				continue;
+			}
+			
 			if (PARSE_BY_FUNCTION) {
 				MIPSFunction newFunction = selector.parseFunction(function);
 				program.addFunction(newFunction);
