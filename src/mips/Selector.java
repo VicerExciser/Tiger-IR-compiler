@@ -39,6 +39,7 @@ public class Selector {
 	public Imm wordSize;
 	public Imm negWordSize;
 
+	private boolean USING_SPIM = false;		//// Set false when using mips-interpreter, else true
 	private boolean SUPPORT_FLOATS = false;
 	private boolean USE_SYMBOLIC = true;
 	private static int tNum = 10;
@@ -525,7 +526,7 @@ public class Selector {
 					//// "bgt arraySize, $zero, arrayArrAssignLoop_main"
 					parsedInst.add(new MIPSInstruction(MIPSOp.BGT, null, 
 							arrSizeValReg,
-							regs.get("zero"),
+							USING_SPIM ? regs.get("$0") : regs.get("zero"),
 							curFunction.labelMap.get(label)));
 				} else {
 					//// operand[0] will be a register/variable,
@@ -957,7 +958,7 @@ public class Selector {
 			} else if (param instanceof IRConstantOperand) {
 				Imm argVal = new Imm(((IRConstantOperand) param).getValueString());
 				if (argVal.getInt() == 0) {
-					arg = regs.get("zero");
+					arg = USING_SPIM ? regs.get("$0") : regs.get("zero");
 				} else {
 					String argRegName = param.toString() + curFunction.name;
 					arg = getMappedReg(argRegName);
