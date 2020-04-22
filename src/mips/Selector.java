@@ -231,8 +231,10 @@ public class Selector {
 
         /* Stack Frame Prologue Step #1: Set up current frame pointer (copy $sp to $fp) */
         //// Generate first true instruction ("move $fp, $sp")
-        mipsFunction.instructions.add(1, new MIPSInstruction(MIPSOp.MOVE, null, 
-        		regs.get("$fp"), regs.get("$sp")));
+        if ("main".equalsIgnoreCase(mipsFunction.name)) {
+	        mipsFunction.instructions.add(1, new MIPSInstruction(MIPSOp.MOVE, null, 
+	        		regs.get("$fp"), regs.get("$sp")));
+	    }
 
 
 
@@ -913,6 +915,9 @@ public class Selector {
 		// parsedInst.add(new MIPSInstruction(MIPSOp.SW, null, 
 		// 		regs.get("$fp"), 
 		// 		stackPointer));
+		parsedInst.add(new MIPSInstruction(MIPSOp.MOVE, null,
+				regs.get("$s6"),
+				regs.get("$fp")));
 
 		//// Save return address $ra in stack ("sw $ra, 0($sp)")
 		// parsedInst.add(new MIPSInstruction(MIPSOp.COMMENT, 
@@ -1026,6 +1031,10 @@ public class Selector {
 		// parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
 		// 		regs.get("$sp"), regs.get("$sp"),
 		// 		wordSize));
+
+		parsedInst.add(new MIPSInstruction(MIPSOp.MOVE, null,
+				regs.get("$fp"),
+				regs.get("$s6")));
 			
 
 		restoreTempRegs(parsedInst);
