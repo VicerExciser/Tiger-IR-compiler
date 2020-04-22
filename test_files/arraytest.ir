@@ -1,8 +1,8 @@
 #start_function
 void main():
-int-list: n, i, A[32]
+int-list: n, i, x, A[32]
 float-list:
-	assign, i, 7
+	assign, i, 3
 	assign, n, 32
 	assign, A, 32, 10
 printarr1:
@@ -10,6 +10,11 @@ printarr1:
 arrstoretest:
 	array_store, n, A, i
 printarr2:
+	call, putc, 10
+arrloadtest:
+	array_load, x, A, i
+printarr3:
+	call, puti, x
 	call, putc, 10
 finish:
 #end_function

@@ -726,28 +726,33 @@ public class Selector {
 					//// If offset value is constant, need to store its value into a register (using load immediate instruction)
 					MIPSOperand offsetIntoArr = new Imm(String.valueOf(((IRConstantOperand) 
 							irInst.operands[2]).getValueString()));
-					offsetIntoArrRegName = arrName + "Offset";
+					offsetIntoArrRegName = arrName + "StoreOffset";
 					offsetIntoArrReg = getMappedReg(offsetIntoArrRegName);
 					parsedInst.add(new MIPSInstruction(MIPSOp.LI, null,
 						offsetIntoArrReg,
 						offsetIntoArr));
 				} else {
-					offsetIntoArrRegName = irInst.operands[2].toString();
+					offsetIntoArrRegName = irInst.operands[2].toString(); // + "StoreOffset";
 					offsetIntoArrReg = getMappedReg(offsetIntoArrRegName);
 				}
 				
+				String shiftedOffsetName = offsetIntoArrRegName + "Shifted";
+				Register shiftedOffsetReg = getMappedReg(shiftedOffsetName);
 
 				//// Left shift offset value by 2 to reach a word boundary (same as 4 * offset)
 				parsedInst.add(new MIPSInstruction(MIPSOp.SLL, null,
-						offsetIntoArrReg,
+						// offsetIntoArrReg,	//// <-- Causes issues when future instructions try to reuse value
+						shiftedOffsetReg,
 						offsetIntoArrReg,
 						TWO));
 
 				//// Add word offset to the array's base address
 				parsedInst.add(new MIPSInstruction(MIPSOp.ADD, null,
+				// parsedInst.add(new MIPSInstruction(MIPSOp.SUB, null,
 						arrStartReg,
 						arrStartReg,
-						offsetIntoArrReg));
+						// offsetIntoArrReg));
+						shiftedOffsetReg));
 
 				//// Finally, store the desired value into (arrayBase + wordOffset)
 				// MIPSOperand valToStore = null;
@@ -770,8 +775,60 @@ public class Selector {
 
 				break;
 			
-			case ARRAY_LOAD:
-				// ...
+			case ARRAY_LOAD:	//// array_load, a, arr, 0  -->  a := arr[0]
+				//// operands[0] is the destination register (must be a variable)
+				//// operands[1] is the array name
+				//// operands[2] is the integer offset into the array
+				arrName = irInst.operands[1].toString();  //((IRArrayType) ((IRVariableOperand) irInst.operands[0]).type).name;
+				arrOperand = processedArrays.get(arrName);
+				arrStartRegName = arrName + "Base";
+				arrStartReg = getMappedReg(arrStartRegName);
+
+				//// "la arrayBase, -128($fp)"  <--  arrayBase will now point to array[0]
+				parsedInst.add(new MIPSInstruction(MIPSOp.LA, null, 
+						arrStartReg,
+						arrOperand.start));
+
+				offsetIntoArrRegName = null;
+				offsetIntoArrReg = null;
+				if (irInst.operands[2] instanceof IRConstantOperand) {
+					//// If offset value is constant, need to store its value into a register (using load immediate instruction)
+					MIPSOperand offsetIntoArr = new Imm(String.valueOf(((IRConstantOperand) 
+							irInst.operands[2]).getValueString()));
+					offsetIntoArrRegName = arrName + "LoadOffset";
+					offsetIntoArrReg = getMappedReg(offsetIntoArrRegName);
+					parsedInst.add(new MIPSInstruction(MIPSOp.LI, null,
+						offsetIntoArrReg,
+						offsetIntoArr));
+				} else {
+					offsetIntoArrRegName = irInst.operands[2].toString(); // + "LoadOffset";
+					offsetIntoArrReg = getMappedReg(offsetIntoArrRegName);
+				}
+
+				shiftedOffsetName = offsetIntoArrRegName + "Shifted";
+				shiftedOffsetReg = getMappedReg(shiftedOffsetName);
+				
+				//// Left shift offset value by 2 to reach a word boundary (same as 4 * offset)
+				parsedInst.add(new MIPSInstruction(MIPSOp.SLL, null,
+						// offsetIntoArrReg,
+						shiftedOffsetReg,
+						offsetIntoArrReg,
+						TWO));
+
+				//// Sub word offset relative to the array's base address
+				// parsedInst.add(new MIPSInstruction(MIPSOp.SUB, null,
+				parsedInst.add(new MIPSInstruction(MIPSOp.ADD, null,
+						arrStartReg,
+						arrStartReg,
+						// offsetIntoArrReg));
+						shiftedOffsetReg));
+
+				//// Finally, load the memory contents of (arrayBase + wordOffset) into destination register
+				Register destination = getMappedReg(irInst.operands[0].toString());
+				parsedInst.add(new MIPSInstruction(MIPSOp.LW, null,
+						destination,
+						new Addr(arrStartReg)));
+				
 				break;
 			
 			default:
