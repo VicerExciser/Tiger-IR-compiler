@@ -9,7 +9,7 @@ public class IRArrayType extends IRType {
 
     private IRType elementType;
 
-    private int size;
+    public int size;
 
     private IRArrayType(IRType elementType, int size) {
         this.elementType = elementType;

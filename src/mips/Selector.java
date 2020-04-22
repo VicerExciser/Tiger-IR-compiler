@@ -59,6 +59,8 @@ public class Selector {
 	private String[] intrinsicFunctions = {"geti", "getf", "getc", "puti", "putf", "putc"};
 	private Map<String, Imm> systemServiceCodes;
 
+	public Map<String, MIPSArray> processedArrays;
+
 	public Selector() { 
 		// labelMap = new HashMap<>();
 		// irToMipsRegMap = new HashMap<>();
@@ -101,6 +103,8 @@ public class Selector {
 		initializeSystemServices();
 
 		stackPointer = new Addr(ZERO, regs.get("$sp"));
+
+		processedArrays = new HashMap<>();
 	}
 
 	private String findUnusedRegName() {
@@ -240,20 +244,37 @@ public class Selector {
 //---------------------------------------------------------------------------------------------------
 
 		/* Stack Frame Prologue Step #2: Allocate sufficient space for the Local Data Storage Section */
-		int local_data_size = 10;	//// Includes space for all 10 temporary regs, so always at least 10 words in size
+		int local_data_size = SAVE_RESTORE_FROM_FP ? 40 : 0;	//// Includes space for all 10 temporary regs, so always at least 10 words in size
 //// FIXME
 		if (!irFunction.variables.isEmpty()) {
 			for (IRVariableOperand irVar : irFunction.variables) {
 
 				/// TODO: Check if is IRArrayType!!
+				if (irVar.type instanceof IRArrayType) {
+					String arrName = irVar.toString();
+					int arrSize = ((IRArrayType) irVar.type).size;
+					Addr arrEnd = new Addr(new Imm(String.valueOf((local_data_size+4)*(-1))), 
+							regs.get("$fp"));
+					local_data_size += (arrSize * 4);
+					Addr arrStart = new Addr(new Imm(String.valueOf(local_data_size*(-1))),
+							regs.get("$fp"));
+					MIPSArray mipsArray = new MIPSArray(arrName, arrSize, arrStart, arrEnd, mipsFunction);
+					
+					//// FOR DEBUG
+					mipsArray.printArrayInfo();
+					//// FOR DEBUG
 
-				MIPSOperand mipsVar = getMappedReg(irVar.toString());
-				mipsFunction.variables.add(mipsVar);
-				local_data_size++;
+					mipsFunction.variables.add((MIPSOperand) mipsArray);
+					processedArrays.put(arrName, mipsArray);
+				} else {
+					MIPSOperand mipsVar = getMappedReg(irVar.toString());
+					mipsFunction.variables.add(mipsVar);
+					local_data_size += 4;
+				}
 			}
 		}
 
-		stackFrameSize += (local_data_size * 4);
+		stackFrameSize += (local_data_size);
 
 //---------------------------------------------------------------------------------------------------
 
@@ -422,61 +443,111 @@ public class Selector {
 				break;
 
 			case ASSIGN:
+				//// CHECK IF AN ARRAY ASSIGNMENT && HANDLE ACCORDINGLY
+				if (IRUtil.isArrayAssignment(irInst)) {
+					//// operand[0] will be an array
+					//// operand[1] will be the size of the array (int)
+					//// operand[2] will be the value to populate the array with (likely int, same type as array)
+					String arrName = irInst.operands[0].toString();  //((IRArrayType) ((IRVariableOperand) irInst.operands[0]).type).name;
+					MIPSArray arrOperand = processedArrays.get(arrName);
+					String arrStartRegName = arrName + "Base";
+					Register arrStartReg = getMappedReg(arrStartRegName);
 
-			//// TODO: CHECK IF AN ARRAY ASSIGNMENT && HANDLE ACCORDINGLY!!!
+					//// "la arrayBase, -128($fp)"
+					parsedInst.add(new MIPSInstruction(MIPSOp.LA, null, 
+							arrStartReg,
+							arrOperand.start));
 
-				// TODO: Use MOVE instead of ADD (keep ADDI for constant operands)
-				// operand[0] will be a register/variable,
-				// operand[1] will be either a var or constant
-			/*
-				// Can replicate an 'assign' using ADD or ADDI with the zero reg ('$0')
-				mipsOperands = new MIPSOperand[3]; //[irInst.operands.length];
-				Register destination = getMappedReg(irInst.operands[0].toString());
-				mipsOperands[0] = destination;
-				mipsOperands[1] = regs.get("zero");
+					String sizeValStr = ((IRConstantOperand) irInst.operands[1]).getValueString();
+					Imm arrSizeVal = new Imm(sizeValStr);
+					String arrSizeValName = arrName + "Size";
+					Register arrSizeValReg = getMappedReg(arrSizeValName);
 
-				MIPSOperand source = null;
-				if (irInst.operands[1] instanceof IRConstantOperand) {
-					op = MIPSOp.ADDI;
-					String constVal = ((IRConstantOperand) irInst.operands[1]).getValueString();
-					//// TODO: Add support for "FLOAT" types, currently only checking for hex & dec
-					String constType = ((constVal.toLowerCase()).indexOf('x') >= 0) 
-									? "HEX" : "DEC";
-					source = new Imm(constVal, constType);
-				} else {
-					op = MIPSOp.ADD;
-					source = getMappedReg(irInst.operands[1].toString());
-				}
-				mipsOperands[2] = source;
-				parsedInst.add(new MIPSInstruction(op, label, mipsOperands));
-			*/
-//---------------------------------------------------------------------------------------------------
-				mipsOperands = new MIPSOperand[irInst.operands.length];
-				Register destination = getMappedReg(irInst.operands[0].toString());
-				mipsOperands[0] = destination;
-				MIPSOperand source = null;
-				if (irInst.operands[1] instanceof IRConstantOperand) {
-					op = MIPSOp.LI;
-					String constVal = ((IRConstantOperand) irInst.operands[1]).getValueString();
-					//// TODO: Add support for "FLOAT" types, currently only checking for hex & dec
-					String constType = ((constVal.toLowerCase()).indexOf('x') >= 0) 
-									? "HEX" : "DEC";
-					source = new Imm(constVal, constType);
-					curFunction.assignments.put(destination.name, ((Imm) source).getInt());
-				} else if (irInst.operands[1] instanceof IRLabelOperand
-						|| irInst.operands[1] instanceof IRFunctionOperand) {
-					op = MIPSOp.LA;
-					String addrName = irInst.operands[1].toString();
-					source = new Addr(addrName);
-					if (!curFunction.labelMap.containsKey(addrName)) {
-						curFunction.labelMap.put(addrName, (Addr) source);
+					//// "li arraySize, 32"
+					parsedInst.add(new MIPSInstruction(MIPSOp.LI, null, 
+							arrSizeValReg,
+							arrSizeVal));
+
+					String arrValStr = ((IRConstantOperand) irInst.operands[2]).getValueString();
+					Imm arrVal = new Imm(arrValStr);
+					String arrValName = arrName + "Value";
+					Register arrValReg = getMappedReg(arrValName);
+
+					//// "li arrayValue, 10"
+					parsedInst.add(new MIPSInstruction(MIPSOp.LI, null, 
+							arrValReg,
+							arrVal));
+
+					label = new String(arrName + "ArrAssignLoop_" + parentName);
+					parsedInst.add(new MIPSInstruction(MIPSOp.LABEL, 
+							label,
+							(MIPSOperand) null));
+					if (!curFunction.labelMap.containsKey(label)) {
+						curFunction.labelMap.put(label, new Addr(label));
 					}
+
+
+					String arrIdxStr = arrName + "Idx";
+					Register arrIdxReg = getMappedReg(arrIdxStr);
+
+					//// "addi arrayIdx, arrayBase, 0"
+					parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
+							arrIdxReg,
+							arrStartReg,
+							ZERO));
+
+					//// "sw arrayValue, 0(arrayIdx)"
+					parsedInst.add(new MIPSInstruction(MIPSOp.SW, null, 
+							arrValReg,
+							new Addr(arrIdxReg)));
+
+					//// "addi arrayBase, arrayBase, 4"
+					parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
+							arrStartReg,
+							arrStartReg,
+							wordSize));
+
+					//// "addi arraySize, arraySize, -1"
+					parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
+							arrSizeValReg,
+							arrSizeValReg,
+							new Imm("-1")));
+
+					//// "bgt arraySize, $zero, arrayArrAssignLoop_main"
+					parsedInst.add(new MIPSInstruction(MIPSOp.BGT, null, 
+							arrSizeValReg,
+							regs.get("zero"),
+							curFunction.labelMap.get(label)));
 				} else {
-					op = MIPSOp.MOVE;
-					source = getMappedReg(irInst.operands[1].toString());
+					//// operand[0] will be a register/variable,
+					//// operand[1] will be either a var or constant
+					mipsOperands = new MIPSOperand[irInst.operands.length];
+					Register destination = getMappedReg(irInst.operands[0].toString());
+					mipsOperands[0] = destination;
+					MIPSOperand source = null;
+					if (irInst.operands[1] instanceof IRConstantOperand) {
+						op = MIPSOp.LI;
+						String constVal = ((IRConstantOperand) irInst.operands[1]).getValueString();
+						//// TODO: Add support for "FLOAT" types, currently only checking for hex & dec
+						String constType = ((constVal.toLowerCase()).indexOf('x') >= 0) 
+										? "HEX" : "DEC";
+						source = new Imm(constVal, constType);
+						curFunction.assignments.put(destination.name, ((Imm) source).getInt());
+					} else if (irInst.operands[1] instanceof IRLabelOperand
+							|| irInst.operands[1] instanceof IRFunctionOperand) {
+						op = MIPSOp.LA;
+						String addrName = irInst.operands[1].toString();
+						source = new Addr(addrName);
+						if (!curFunction.labelMap.containsKey(addrName)) {
+							curFunction.labelMap.put(addrName, (Addr) source);
+						}
+					} else {
+						op = MIPSOp.MOVE;
+						source = getMappedReg(irInst.operands[1].toString());
+					}
+					mipsOperands[1] = source;
+					parsedInst.add(new MIPSInstruction(op, label, mipsOperands));
 				}
-				mipsOperands[1] = source;
-				parsedInst.add(new MIPSInstruction(op, label, mipsOperands));
 				break;
 
 			case ADD:
@@ -621,7 +692,7 @@ public class Selector {
 				if (Arrays.asList(intrinsicFunctions).contains(subroutineName)) {
 					parsedInst.addAll(parseIntrinsicFunction(subroutineName, irInst.operands));
 				} else {
-					/*Register*/ destination = getMappedReg(irInst.operands[0].toString());
+					Register destination = getMappedReg(irInst.operands[0].toString());
 					// parseUserFunction(parsedInst, irInst.operands, IRInstruction.OpCode.CALLR);
 					parseUserFunction(subroutineName, parsedInst, irInst.operands, destination);
 				}

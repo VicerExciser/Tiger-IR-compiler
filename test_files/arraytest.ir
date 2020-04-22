@@ -1,0 +1,7 @@
+#start_function
+void main():
+int-list: A[32]
+float-list:
+	assign, A, 32, 10
+finish:
+#end_function
