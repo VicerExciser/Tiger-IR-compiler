@@ -2,5 +2,3 @@
 
 rm -rf build/
 rm -f **/*.class
-
-
