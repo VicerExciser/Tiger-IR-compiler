@@ -15,4 +15,9 @@ public class IRVariableOperand extends IROperand {
     public String getName() {
         return value;
     }
+
+    @Override
+    public String toString() {
+        return this.getName();
+    }
 }
