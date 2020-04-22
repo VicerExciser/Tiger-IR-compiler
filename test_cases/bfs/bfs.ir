@@ -1,0 +1,70 @@
+#start_function
+void main():
+int-list: n, m, v[100], e[1000], en[100], q[100], p, i, j, k, c, x, t, now, tv, t0, t1, ii
+float-list:
+    assign, v, 100, 0
+    assign, m, 10
+    assign, p, 0
+    callr, n, geti
+    assign, i, 0
+L0:
+    brgeq, EOI, i, n
+    callr, c, geti
+    array_store, c, en, i
+    assign, j, 0
+L1:
+    brgeq, L2, j, c
+    callr, x, geti
+    mult, t, m, i
+    add, t, t, j
+    array_store, x, e, t
+    add, j, j, 1
+    goto, L1
+L2:
+    add, i, i, 1
+    goto, L0
+EOI:
+    array_store, 1, v, 0
+    array_store, 0, q, 0
+    array_load, t0, v, 0
+    assign, ii, 0
+    assign, i, ii
+    assign, j, 1
+L3:
+    breq, FIN, i, j
+    array_load, now, q, i
+    add, ii, i, 1
+    assign, i, ii
+    array_load, c, en, now
+    assign, k, i
+    assign, k, 0
+L4:
+    brgeq, L5, k, c
+    assign, t, k
+    mult, t, m, now
+    add, t, t, k
+    array_load, x, e, t
+    array_load, tv, v, x
+    breq, L6, tv, 1
+    array_store, 1, v, x
+    array_store, x, q, j
+    array_load, t0, v, x
+    add, j, j, 1
+L6:
+    add, k, k, 1
+    goto, L4
+L5:
+    goto, L3
+FIN:
+    assign, ii, 0
+    assign, i, ii
+L7:
+    breq, L8, i, j
+    array_load, x, q, i
+    call, puti, x
+    call, putc, 10
+    add, ii, i, 1
+    assign, i, ii
+    goto, L7
+L8:
+#end_function

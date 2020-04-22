@@ -156,6 +156,7 @@ FIN_main:
     sw $t9, 0($sp)
     addi $sp, $sp, -4
     sw $ra, 0($sp)
+    # Pushing function call args onto stack
     addi $sp, $sp, -4
     sw $t5, 0($sp)
     addi $sp, $sp, -4
@@ -166,6 +167,7 @@ FIN_main:
     sw $t8, 0($sp)
     addi $sp, $sp, -4
     sw $t9, 0($sp)
+    # Calling subroutine 'routine'
     jal routine
     lw $ra, 0($sp)
     addi $sp, $sp, 4
@@ -206,6 +208,18 @@ FIN_main:
     li $v0, 11
     li $a0, 10
     syscall
+    # read_int
+    li $v0, 5
+    syscall
+    move $t12main, $v0
+    # print_int
+    li $v0, 1
+    move $a0, $t12main
+    syscall
+    # print_char
+    li $v0, 11
+    li $a0, 10
+    syscall
     # Program exit
     li $v0, 10
     syscall
@@ -213,7 +227,7 @@ FIN_main:
 
 routine: 
     move $fp, $sp
-    # Fetch arguments from stack
+    # Fetch arguments from stack & collapse
     lw $t9, 0($sp)
     addi $sp, $sp, 4
     lw $t8, 0($sp)
