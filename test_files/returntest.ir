@@ -72,4 +72,8 @@ float-list:
     call, puti, y
     call, putc, 10
     call, putc, 10
+    div, z, z, 4
+    call, puti, z
+    call, putc, 10
+    call, putc, 10
 #end_function

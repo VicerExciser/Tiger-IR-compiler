@@ -480,29 +480,35 @@ public class Selector {
 				break;
 
 			case ADD:
-				parsedInst.add(parseBinaryOp(MIPSOp.ADD, MIPSOp.ADDI, irInst.operands));
+				// parsedInst.add(parseBinaryOp(MIPSOp.ADD, MIPSOp.ADDI, irInst.operands));
+				parseBinaryOp(parsedInst, MIPSOp.ADD, MIPSOp.ADDI, irInst.operands);
 				break;
 
 			case SUB:
-				parsedInst.add(parseBinaryOp(MIPSOp.SUB, null, irInst.operands));
+				// parsedInst.add(parseBinaryOp(MIPSOp.SUB, null, irInst.operands));
+				parseBinaryOp(parsedInst, MIPSOp.SUB, null, irInst.operands);
 				break;
 
 			case MULT:
-				parsedInst.add(parseBinaryOp(MIPSOp.MUL, null, irInst.operands));
+				// parsedInst.add(parseBinaryOp(MIPSOp.MUL, null, irInst.operands));
+				parseBinaryOp(parsedInst, MIPSOp.MUL, null, irInst.operands);
 				break;
 
 			case DIV:
 				// TODO: Can check if last operand is a power of 2 and
 				// 			replace DIV with SLL
-				parsedInst.add(parseBinaryOp(MIPSOp.DIV, null, irInst.operands));
+				// parsedInst.add(parseBinaryOp(MIPSOp.DIV, null, irInst.operands));
+				parseBinaryOp(parsedInst, MIPSOp.DIV, null, irInst.operands);
 				break;
 			
 			case AND:
-				parsedInst.add(parseBinaryOp(MIPSOp.AND, MIPSOp.ANDI, irInst.operands));
+				// parsedInst.add(parseBinaryOp(MIPSOp.AND, MIPSOp.ANDI, irInst.operands));
+				parseBinaryOp(parsedInst, MIPSOp.AND, MIPSOp.ANDI, irInst.operands);
 				break;
 			
 			case OR:
-				parsedInst.add(parseBinaryOp(MIPSOp.OR, MIPSOp.ORI, irInst.operands));
+				// parsedInst.add(parseBinaryOp(MIPSOp.OR, MIPSOp.ORI, irInst.operands));
+				parseBinaryOp(parsedInst, MIPSOp.OR, MIPSOp.ORI, irInst.operands);
 				break;
 			
 			case BREQ:	// breq, Label, Rs, Rt --> BEQ Rs, Rt, Label
@@ -633,14 +639,13 @@ public class Selector {
 			default:
 				// return parsedInst;
 		}
-
-
-
 		return parsedInst;
 	}
 
-	private MIPSInstruction parseBinaryOp(MIPSOp opcode1, MIPSOp opcode2, 
-                                                    IROperand[] operands) {
+
+	private void parseBinaryOp(List<MIPSInstruction> parsedInst,
+								MIPSOp opcode1, MIPSOp opcode2, 
+                                        IROperand[] operands) {
         MIPSOperand[] mipsOperands = new MIPSOperand[operands.length];
         MIPSOp op = opcode1;
 
@@ -657,17 +662,30 @@ public class Selector {
         mipsOperands[0] = (MIPSOperand) getMappedReg(destination);
         for (int i = 1; i < 3; i++) {
             if (operands[i] instanceof IRConstantOperand) {
-                IRType type = ((IRConstantOperand) operands[i]).type;
-                mipsOperands[i] = new Imm(operands[i].toString(), 
-                    "DEC");     // For now: only handling integers, floats are extra credit
-                curFunction.assignments.put(destination, ((Imm) mipsOperands[i]).getInt());
+            	if (opcode2 != null) {
+	                IRType type = ((IRConstantOperand) operands[i]).type;
+	                mipsOperands[i] = new Imm(operands[i].toString(), 
+	                    "DEC");     // For now: only handling integers, floats are extra credit
+	                curFunction.assignments.put(destination, ((Imm) mipsOperands[i]).getInt());
+	            } else {
+	            	System.out.println(" FOUND FOUND FOUND ");
+	            	//// SUB, MUL, and DIV cannot accept an immediate value as an operand...
+	            	//// First, load the immediate value into a register, then perform binary op on the reg
+	            	Register t = getMappedReg("temp");
+	            	Imm imm = new Imm(operands[i].toString());
+	            	parsedInst.add(new MIPSInstruction(MIPSOp.LI, null,
+	            			/*(MIPSOperand)*/ t, 
+	            			/*(MIPSOperand)*/ imm));
+	            	mipsOperands[i] = (MIPSOperand) t;
+	            }
             } 
             else {
                 mipsOperands[i] = (MIPSOperand) getMappedReg(operands[i].toString());
             }
         }
 
-        return new MIPSInstruction(op, null, mipsOperands);
+        // return new MIPSInstruction(op, null, mipsOperands);
+        parsedInst.add(new MIPSInstruction(op, null, mipsOperands));
     }
 
     // private List<MIPSInstruction> parseBranch(MIPSOp opcode1, MIPSOp opcode2, 
