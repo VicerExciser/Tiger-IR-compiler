@@ -46,7 +46,10 @@ public class Selector {
 
 	private int FP_OFFSET_T0 = -4;
 	private int FP_OFFSET_T9 = -40;
+	private Imm NEG_ONE;
 	private Imm ZERO;
+	private Imm ONE;
+	private Imm TWO;
 
 	private boolean SAVE_RESTORE_FROM_FP = false;
 	private Imm posTempRegSpace;
@@ -69,7 +72,10 @@ public class Selector {
 		processedFunctions = new LinkedList<>();
 		curFunction = null;
 
+		NEG_ONE = new Imm("-1");
 		ZERO = new Imm("0");
+		ONE = new Imm("1");
+		TWO = new Imm("2");
 		wordSize = new Imm("4");
 		negWordSize = new Imm("-4");
 		posTempRegSpace = new Imm("40");
@@ -261,7 +267,7 @@ public class Selector {
 					MIPSArray mipsArray = new MIPSArray(arrName, arrSize, arrStart, arrEnd, mipsFunction);
 					
 					//// FOR DEBUG
-					mipsArray.printArrayInfo();
+					// mipsArray.printArrayInfo();
 					//// FOR DEBUG
 
 					mipsFunction.variables.add((MIPSOperand) mipsArray);
@@ -511,7 +517,8 @@ public class Selector {
 					parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
 							arrSizeValReg,
 							arrSizeValReg,
-							new Imm("-1")));
+							// new Imm("-1")));
+							NEG_ONE));
 
 					//// "bgt arraySize, $zero, arrayArrAssignLoop_main"
 					parsedInst.add(new MIPSInstruction(MIPSOp.BGT, null, 
@@ -699,8 +706,68 @@ public class Selector {
 
 				break;
 			
-			case ARRAY_STORE:
-				// ...
+			case ARRAY_STORE:	//// array_store, a, arr, 0  -->  arr[0] := a
+				//// operands[0] is the value (of same element type as the array) to store
+				//// operands[1] is the array name
+				//// operands[2] is the integer offset into the array
+				String arrName = irInst.operands[1].toString();  //((IRArrayType) ((IRVariableOperand) irInst.operands[0]).type).name;
+				MIPSArray arrOperand = processedArrays.get(arrName);
+				String arrStartRegName = arrName + "Base";
+				Register arrStartReg = getMappedReg(arrStartRegName);
+
+				//// "la arrayBase, -128($fp)"  <--  arrayBase will now point to array[0]
+				parsedInst.add(new MIPSInstruction(MIPSOp.LA, null, 
+						arrStartReg,
+						arrOperand.start));
+
+				String offsetIntoArrRegName = null;
+				Register offsetIntoArrReg = null;
+				if (irInst.operands[2] instanceof IRConstantOperand) {
+					//// If offset value is constant, need to store its value into a register (using load immediate instruction)
+					MIPSOperand offsetIntoArr = new Imm(String.valueOf(((IRConstantOperand) 
+							irInst.operands[2]).getValueString()));
+					offsetIntoArrRegName = arrName + "Offset";
+					offsetIntoArrReg = getMappedReg(offsetIntoArrRegName);
+					parsedInst.add(new MIPSInstruction(MIPSOp.LI, null,
+						offsetIntoArrReg,
+						offsetIntoArr));
+				} else {
+					offsetIntoArrRegName = irInst.operands[2].toString();
+					offsetIntoArrReg = getMappedReg(offsetIntoArrRegName);
+				}
+				
+
+				//// Left shift offset value by 2 to reach a word boundary (same as 4 * offset)
+				parsedInst.add(new MIPSInstruction(MIPSOp.SLL, null,
+						offsetIntoArrReg,
+						offsetIntoArrReg,
+						TWO));
+
+				//// Add word offset to the array's base address
+				parsedInst.add(new MIPSInstruction(MIPSOp.ADD, null,
+						arrStartReg,
+						arrStartReg,
+						offsetIntoArrReg));
+
+				//// Finally, store the desired value into (arrayBase + wordOffset)
+				// MIPSOperand valToStore = null;
+				Register valToStoreReg = null;
+				if (irInst.operands[0] instanceof IRConstantOperand) {
+					//// If value is constant, need to store its value into a register (using load immediate instruction)
+					Imm valToStore = new Imm(String.valueOf(((IRConstantOperand) 
+							irInst.operands[0]).getValueString()));
+					String valToStoreRegName = arrName + "ValueToStore";
+					valToStoreReg = getMappedReg(valToStoreRegName);
+					parsedInst.add(new MIPSInstruction(MIPSOp.LI, null,
+							valToStoreReg,
+							valToStore));
+				} else {
+					valToStoreReg = getMappedReg(irInst.operands[0].toString());
+				}
+				parsedInst.add(new MIPSInstruction(MIPSOp.SW, null,
+						valToStoreReg,
+						new Addr(arrStartReg)));
+
 				break;
 			
 			case ARRAY_LOAD:
