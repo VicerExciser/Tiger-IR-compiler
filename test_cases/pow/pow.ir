@@ -1,0 +1,39 @@
+#start_function
+int pow(int x, int n):
+int-list: r, t, s, t0, t1, t2
+float-list:
+    assign, t2, 0
+    assign, s, 1
+    brneq, LABEL0, n, 0
+    assign, t1, 0
+    assign, r, t2
+    assign, r, s
+    goto, RET
+LABEL0:
+    assign, t0, 0
+    assign, t1, t0
+    div, t, n, 2
+    callr, s, pow, x, t
+    mult, s, s, s
+    assign, r, s
+    mult, t, t, 2
+    breq, RET, t, n
+    mult, s, s, x
+    assign, r, t2
+    assign, r, s
+RET:
+    return, r
+#end_function
+
+#start_function
+void main():
+int-list: a, b, c
+float-list:
+    callr, a, geti
+    callr, b, geti
+    brlt, END, b, 0
+    callr, c, pow, a, b
+    call, puti, c
+    call, putc, 10
+END:
+#end_function

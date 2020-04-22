@@ -181,7 +181,7 @@ public class Selector {
 
 		if (!irFunction.parameters.isEmpty()) {
 			mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.COMMENT, 
-					"Fetch arguments from stack", 
+					"Fetch arguments from stack & collapse", 
 					(MIPSOperand) null));
 			/*
 				Must compute the size of params & vars for the function
@@ -434,7 +434,8 @@ public class Selector {
 				break;
 			
 			case RETURN:
-				// ...
+				//// jr $ra
+				parsedInst.add(new MIPSInstruction(MIPSOp.JR, null, regs.get("$ra")));
 				break;
 			
 			case CALL:
@@ -450,6 +451,9 @@ public class Selector {
 					saveTempRegs(parsedInst);
 
 					//// Save return address $ra in stack ("sw $ra, 0($sp)")
+					parsedInst.add(new MIPSInstruction(MIPSOp.COMMENT, 
+							"Save return address $ra in stack", 
+							(MIPSOperand) null));
 					parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
 							regs.get("$sp"), 
 							regs.get("$sp"),
@@ -467,6 +471,9 @@ public class Selector {
 
 					//// TODO: FIX ME!
 					//// Push all arguments onto the stack
+					parsedInst.add(new MIPSInstruction(MIPSOp.COMMENT, 
+							"Pushing function call args onto stack", 
+							(MIPSOperand) null));
 					for (int idx = 1; idx < irInst.operands.length; idx++) {
 						parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
 								regs.get("$sp"), 
@@ -492,6 +499,9 @@ public class Selector {
 					
 
 					//// Jump and link to the function ("jal functionName")
+					parsedInst.add(new MIPSInstruction(MIPSOp.COMMENT, 
+							"Calling subroutine '"+subroutineName+"'", 
+							(MIPSOperand) null));
 					Addr labelAddr = null;
 					if (curFunction.labelMap.containsKey(subroutineName)) {
 						labelAddr = curFunction.labelMap.get(subroutineName);
@@ -518,6 +528,9 @@ public class Selector {
 					*/
 
 					//// Restore return address:
+					// parsedInst.add(new MIPSInstruction(MIPSOp.COMMENT, 
+					// 		"Restoring return address", 
+					// 		(MIPSOperand) null));
 					////	"lw $ra, 0($sp)"
 					////	"addi $sp, $sp, 4"
 					parsedInst.add(new MIPSInstruction(MIPSOp.LW, null, 
@@ -737,7 +750,7 @@ public class Selector {
 	    li $a0, 10
 	    syscall
 	*/
-	public List<MIPSInstruction> parseIntrinsicFunction(String name, IROperand[] operands) {
+	private List<MIPSInstruction> parseIntrinsicFunction(String name, IROperand[] operands) {
 		List<MIPSInstruction> parsedFunc = new LinkedList<>();
 		MIPSOperand[] mipsOperands;
 		Imm serviceCode = null;

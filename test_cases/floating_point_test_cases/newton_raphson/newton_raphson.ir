@@ -1,0 +1,54 @@
+#start_function
+float f(float x, float a, float b, float c):
+int-list: troll1, troll2, troll3
+float-list: fval, t1, t2, t3, t4
+    mult, t1, x, x
+    mult, t1, t1, a
+    assign, troll1, 1
+    mult, t2, x, b
+    assign, t3, c
+    assign, troll2, 2
+    add, t4, t1, t2
+    add, t4, t4, t3
+    assign, troll3, 3
+    assign, fval, t4
+    return, fval
+#end_function
+
+#start_function
+float fprime(float x, float a, float b, float c):
+int-list:
+float-list: fprimeval, t1, t2, t3
+    mult, t1, 2.0, x
+    mult, t1, t1, a
+    assign, t2, b
+    add, t3, t1, t2
+    assign, fprimeval, t3
+    return, fprimeval 
+#end_function
+
+#start_function
+void main():
+int-list:
+float-list: newX, oldX, t1, t2, t3, t4, threshold, a, b, c, t0
+    callr, a, getf
+    callr, b, getf
+    callr, c, getf
+    assign, oldX, 3.6
+    assign, newX, oldX
+    assign, threshold, 0.00066
+notyet:    
+    callr, t1, f, oldX, a, b, c
+    callr, t2, fprime, oldX, a, b, c
+    div, t3, t1, t2
+    sub, newX, oldX, t3
+    assign, t4, newX
+    sub, t4, newX, oldX
+    brgeq, check, t4, 0.
+    mult, t4, t4, -1.0
+check:
+    assign, oldX, newX
+    brgeq, notyet, t4, threshold
+    call, putf, newX
+    call, putc, 10
+#end_function
