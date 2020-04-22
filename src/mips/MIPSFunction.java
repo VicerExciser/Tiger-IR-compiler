@@ -53,4 +53,13 @@ public class MIPSFunction {
         // this.instructions.add(1, new MIPSInstruction(MOVE, null, 
         // 		new Register("$fp", false), new Register("$sp", false)));
     }
+
+    public void printRegisterMapping() {
+        System.out.println("\n Register Mapping for Function "+name+":\n");
+        for (String key : this.irToMipsRegMap.keySet()) {
+            System.out.println("\t"+key+"  <--->  "+irToMipsRegMap.get(key).toString());
+        }
+        System.out.println("\n");
+    }
+
 }

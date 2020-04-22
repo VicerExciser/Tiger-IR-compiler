@@ -583,31 +583,38 @@ public class Selector {
 				break;
 			
 			case BREQ:	// breq, Label, Rs, Rt --> BEQ Rs, Rt, Label
-				parsedInst.add(parseBranch(MIPSOp.BEQ, irInst.operands)); //, parentName));
+				// parsedInst.add(parseBranch(MIPSOp.BEQ, irInst.operands)); //, parentName));
+				parseBranch(parsedInst, MIPSOp.BEQ, irInst.operands);
 				break;
 			
 			case BRNEQ:	// brneq, Label, Rs, Rt --> BNE Rs, Rt, Label
-				parsedInst.add(parseBranch(MIPSOp.BNE, irInst.operands)); //, parentName));
+				// parsedInst.add(parseBranch(MIPSOp.BNE, irInst.operands)); //, parentName));
+				parseBranch(parsedInst, MIPSOp.BNE, irInst.operands);
 				break;
 			
 			case BRLT:	// brlt, Label, Rs, Rt --> BLT Rs, Rt, Label
-				parsedInst.add(parseBranch(MIPSOp.BLT, irInst.operands)); //, parentName));
+				// parsedInst.add(parseBranch(MIPSOp.BLT, irInst.operands)); //, parentName));
+				parseBranch(parsedInst, MIPSOp.BLT, irInst.operands);
 				break;
 			
 			case BRGT:	// brgt, Label, Rs, Rt --> BGT Rs, Rt, Label
-				parsedInst.add(parseBranch(MIPSOp.BGT, irInst.operands)); //, parentName));
+				// parsedInst.add(parseBranch(MIPSOp.BGT, irInst.operands)); //, parentName));
+				parseBranch(parsedInst, MIPSOp.BGT, irInst.operands);
 				break;
 			
 			case BRLEQ:	// brleq, Label, Rs, Rt -->  BLT Rs, Rt, Label; BEQ Rs, Rt, Label
-				// beq $t0, $t1, Label 		# if $t0 = $t1, goes to Label
-				// slt $t2, $t1, $t0 		# checks if $t0 > $t1
-				// beq $t2, zero, Label 	# if $t0 < $t1, goes to Label
-				parsedInst.add(parseBranch(MIPSOp.BLT, irInst.operands)); //, parentName));
-				parsedInst.add(parseBranch(MIPSOp.BEQ, irInst.operands)); //, parentName));
+				//// beq $t0, $t1, Label 		# if $t0 = $t1, goes to Label
+				//// slt $t2, $t1, $t0 		# checks if $t0 > $t1
+				//// beq $t2, zero, Label 	# if $t0 < $t1, goes to Label
+				// parsedInst.add(parseBranch(MIPSOp.BLT, irInst.operands)); //, parentName));
+				// parsedInst.add(parseBranch(MIPSOp.BEQ, irInst.operands)); //, parentName));
+				parseBranch(parsedInst, MIPSOp.BLT, irInst.operands);
+				parseBranch(parsedInst, MIPSOp.BEQ, irInst.operands);
 				break;
 			
 			case BRGEQ:	// brgeq, Label, Rs, Rt --> BGE Rs, Rt, Label
-				parsedInst.add(parseBranch(MIPSOp.BGE, irInst.operands)); //, parentName));
+				// parsedInst.add(parseBranch(MIPSOp.BGE, irInst.operands)); //, parentName));
+				parseBranch(parsedInst, MIPSOp.BGE, irInst.operands);
 				break;
 
 			case GOTO:
@@ -696,7 +703,6 @@ public class Selector {
 	                    "DEC");     // For now: only handling integers, floats are extra credit
 	                curFunction.assignments.put(destination, ((Imm) mipsOperands[i]).getInt());
 	            } else {
-	            	System.out.println(" FOUND FOUND FOUND ");
 	            	//// SUB, MUL, and DIV cannot accept an immediate value as an operand...
 	            	//// First, load the immediate value into a register, then perform binary op on the reg
 	            	Register t = getMappedReg("temp");
@@ -717,9 +723,8 @@ public class Selector {
     }
 
     // private List<MIPSInstruction> parseBranch(MIPSOp opcode1, MIPSOp opcode2, 
-    private MIPSInstruction parseBranch(MIPSOp op, IROperand[] operands) { //, 
-                                                    // String parentFuncName) {
-        // List<MIPSInstruction> parsedBranch = new LinkedList<>();
+    private void parseBranch(List<MIPSInstruction> parsedInst,
+								MIPSOp op, IROperand[] operands) { 
         MIPSOperand[] mipsOperands = new MIPSOperand[operands.length];
         Addr branchTarget = null;
         String labelName = operands[0].toString();
@@ -737,17 +742,24 @@ public class Selector {
 
         for (int i = 1; i <= 2; i++) {
             if (operands[i] instanceof IRConstantOperand) {
+            	//// SPIM does not support constant operands for branches! Must first save to a register
+            	/*
                 if (((IRConstantOperand) operands[i]).type instanceof IRIntType) {
                     mipsOperands[i-1] = new Imm(operands[i].toString()); //, "DEC");
                 } else {
                     mipsOperands[i-1] = new Imm(operands[i].toString(), "?");
                 }
+                */
+                Register t = getMappedReg("temp");
+                Imm imm = new Imm(((IRConstantOperand) operands[i]).getValueString());
+                parsedInst.add(new MIPSInstruction(MIPSOp.LI, null, t, imm));
+                mipsOperands[i-1] = t;
             } else {
                 mipsOperands[i-1] = getMappedReg(operands[i].toString());
             }
         }
 
-        return new MIPSInstruction(op, null, mipsOperands);
+        parsedInst.add(new MIPSInstruction(op, null, mipsOperands));
     }
 
     /*
@@ -937,11 +949,21 @@ public class Selector {
 				if (arg == null || ((Register) arg).name.contains(curFunction.name)) {
 					arg = getArgumentReg(param.toString());
 				}
-			// } else if (param instanceof IRConstantOperand) {
-			// 	arg = new Imm(param.toString());
+			} else if (param instanceof IRConstantOperand) {
+				Imm argVal = new Imm(((IRConstantOperand) param).getValueString());
+				if (argVal.getInt() == 0) {
+					arg = regs.get("zero");
+				} else {
+					String argRegName = param.toString() + curFunction.name;
+					arg = getMappedReg(argRegName);
+					parsedInst.add(new MIPSInstruction(MIPSOp.LI, null, arg, argVal));
+				}
 			} else {
 				// arg = new Addr(param.toString());	// prolly invalid
-				System.out.println("[CALL] ERROR: Invalid function argument type");
+				arg = processedArrays.get(param.toString());
+				if (arg == null) {
+					System.out.println("[CALL] ERROR: Invalid function argument type");
+				}
 			}
 			parsedInst.add(new MIPSInstruction(MIPSOp.SW, null,
 					arg, stackPointer));
