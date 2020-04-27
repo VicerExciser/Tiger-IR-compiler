@@ -36,6 +36,8 @@ public class Selector {
 	// public Map<String, String> irToMipsRegMap;
 	// public Map<String, Integer> assignments;
 
+	public RegAllocator regAllocator;	//// MIPS Register Allocator Object
+
 	public List<MIPSFunction> processedFunctions;
 	public MIPSFunction curFunction;
 
@@ -69,7 +71,7 @@ public class Selector {
 
 	public Map<String, MIPSArray> processedArrays;
 
-	public Selector() { 
+	public Selector(int registerAllocationMode) { 
 		// labelMap = new HashMap<>();
 		// irToMipsRegMap = new HashMap<>();
 		// assignments = new HashMap<>();
@@ -85,6 +87,8 @@ public class Selector {
 		negWordSize = new Imm("-4");
 		posTempRegSpace = new Imm("40");
 		negTempRegSpace = new Imm("-40");
+
+		this.regAllocator = new RegAllocator(registerAllocationMode);
 
 		initializeRegisters();
 

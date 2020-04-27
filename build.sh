@@ -6,4 +6,4 @@ if [ ! -d "$DIR" ]; then
 fi
 
 find src -name "*.java" > sources.txt
-javac -d build @sources.txt
+javac -Xlint:deprecation -d build @sources.txt
