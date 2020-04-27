@@ -1,5 +1,6 @@
 package mips;
 
+import mips.cfg.*;
 import mips.operand.*;
 
 import java.util.Arrays;
@@ -47,11 +48,12 @@ public class MIPSInstruction {
     public MIPSOp op;
     public String label;
     public List<MIPSOperand> operands;
-
+    public MIPSBlock parentBlock;
 
     public MIPSInstruction(MIPSOp op, String label, MIPSOperand... operands) {
         this.op = op;
         this.label = label;
+        this.parentBlock = null;
 
         if (operands == null) {
             this.operands = new ArrayList<>();

@@ -72,6 +72,9 @@ public class Assembler {
 		else if (PARSE_BY_FUNCTION) {
 			MIPSFunction newFunction = selector.parseFunction(mainFunction);
 			program.addFunction(newFunction);
+			
+			//// FOR DEBUG
+			// newFunction.printRegisterMapping();
 		}
 
 		for (IRFunction function : inFile.functions) {
@@ -80,10 +83,13 @@ public class Assembler {
 				System.out.println("-- Assembler failed to remove main function from IR program after processing");
 				continue;
 			}
-			
+
 			if (PARSE_BY_FUNCTION) {
 				MIPSFunction newFunction = selector.parseFunction(function);
 				program.addFunction(newFunction);
+
+				//// FOR DEBUG
+				newFunction.printRegisterMapping();
 			}
 			else {
 				for (IRInstruction oldInst : function.instructions) {
@@ -99,6 +105,13 @@ public class Assembler {
 
 		program.finalize();
 		System.out.println("\n[ Assembler finished - program output to " + program.name + " ]");
+	
+
+		//// FOR DEBUG
+		for (MIPSFunction func : program.functions) {
+			func.printRegisterMapping();
+		}
+
 	}
 
 }

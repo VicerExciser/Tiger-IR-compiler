@@ -31,13 +31,15 @@ public class MaxBasicBlock extends BasicBlockBase {
 		// to the first non-label instruction of this block.
 		this.topLabel = null;
 		int i = 0;
-		while (i < instructions.size() && instructions.get(i).opCode == IRInstruction.OpCode.LABEL) {
+		while (i < instructions.size() 
+				&& instructions.get(i).opCode == IRInstruction.OpCode.LABEL) {
 			this.topLabel = instructions.get(i);
 			this.leader = instructions.get(i++);
 //			if (i+1 < instructions.size())
 //				this.leader = instructions.get(++i);
 		}
-		if (i < instructions.size() && instructions.get(i).opCode != IRInstruction.OpCode.LABEL)
+		if (i < instructions.size() && instructions.get(i).opCode 
+				!= IRInstruction.OpCode.LABEL)
 			this.leader = instructions.get(i);
 
 		// We want to keep the instructions ordered, yet ensure no duplicates can exist:

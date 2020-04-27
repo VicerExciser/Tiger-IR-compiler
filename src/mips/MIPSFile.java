@@ -8,6 +8,7 @@ package mips;
 
 import ir.*;
 import mips.*;
+import mips.cfg.*;
 import mips.operand.*;
 import mips.MIPSOp.*;
 
@@ -69,8 +70,28 @@ public class MIPSFile {
 	}
 
 	public void addFunction(MIPSFunction function) {
-		for (MIPSInstruction instruction : function.instructions) {
-			append(instruction);
+		// for (MIPSInstruction instruction : function.getInstructions()) {
+		//		append(instruction);
+		// }
+		for (MIPSBlock block : function.cfg.blocks) {
+
+			//// FOR DEBUG
+			String prefix = " ---- { BLOCK  '" + block.id + "'  ";
+			String suffix = " } ---- ";
+			append(new MIPSInstruction(MIPSOp.COMMENT, 
+					prefix + "BEGIN" + suffix,
+					(MIPSOperand[]) null));
+			//// FOR DEBUG
+
+			for (MIPSInstruction instruction : block.instructions) {
+				append(instruction);
+			}
+
+			//// FOR DEBUG
+			append(new MIPSInstruction(MIPSOp.COMMENT, 
+					prefix + "END" + suffix,
+					(MIPSOperand[]) null));
+			//// FOR DEBUG
 		}
 
 		//// End of program (i.e., main function) must make 'exit' syscall

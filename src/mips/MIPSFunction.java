@@ -1,7 +1,10 @@
 package mips;
 
 import mips.*;
+import mips.cfg.*;
 import mips.operand.*;
+
+import ir.cfg.*;
 
 import java.util.List;
 // import java.util.ArrayList;
@@ -18,11 +21,14 @@ public class MIPSFunction {
 
     public List<MIPSOperand> parameters;
     public List<MIPSOperand> variables;
-    public List<MIPSInstruction> instructions;
+    /*public*/ List<MIPSInstruction> instructions;
+    public MIPSCFG cfg;
 
     public Map<String, Addr> labelMap;
 	public Map<String, String> irToMipsRegMap;
 	public Map<String, Integer> assignments;
+
+    private int blockTrackingNumber;
 
 	public MIPSFunction(String name) {
 		this(name, null, new LinkedList<>(), new LinkedList<>(), 
@@ -46,6 +52,8 @@ public class MIPSFunction {
 		this.irToMipsRegMap = new HashMap<>();
 		this.assignments = new HashMap<>();
 
+        blockTrackingNumber = 0;
+
         // //// Generate function name label as first instruction
         // this.instructions.add(0, new MIPSInstruction(LABEL, name, null));
 
@@ -60,6 +68,67 @@ public class MIPSFunction {
             System.out.println("\t"+key+"  <--->  "+irToMipsRegMap.get(key).toString());
         }
         System.out.println("\n");
+    }
+
+
+    /* i.e., blocks for the function "main" can be identified as
+    "main_B0", "main_B1", "main_B2", etc.
+    */
+    public String getUniqueBlockID() {
+        String blockID = this.name + "_B" + String.valueOf(blockTrackingNumber);
+        blockTrackingNumber++;
+        return blockID;
+    }
+
+    public MIPSBlock getBlockWithID(String blockID) {
+        return this.cfg.getBlockWithID(blockID);
+    }
+
+    public List<MIPSInstruction> getInstructions() {
+        return this.instructions;
+    }
+
+    public MIPSBlock getCurrentBlock() {
+        return ((MIPSInstruction) (((LinkedList) (this.instructions)).getLast())).parentBlock;
+    }
+
+    public void addInstructionToCurrentBlock(MIPSInstruction inst) {
+        MIPSBlock curBlock = getCurrentBlock();
+        curBlock.appendInstruction(inst);
+        this.instructions.add(inst);
+    }
+
+    public void addInstructionsToCurrentBlock(List<MIPSInstruction> parsedInst) {
+        addInstructionsToBlock(getCurrentBlock(), parsedInst);
+    }
+
+    public void addInstructionsToBlockID(String blockID, List<MIPSInstruction> parsedInst) {
+        addInstructionsToBlock(getBlockWithID(blockID), parsedInst);
+    }
+
+    public void addInstructionsToBlock(MIPSBlock block, List<MIPSInstruction> parsedInst) {
+        if (block == null) {
+            System.out.println("[MIPSFunction::addInstructionsToBlock] ERROR: MIPSBlock instance cannot be null!");
+            return;
+        }
+
+        for (MIPSInstruction inst : parsedInst) {
+            block.appendInstruction(inst);
+            this.instructions.add(inst);
+        }
+    }
+
+    public void addBlock(MIPSBlock block) {
+        // if (this.cfg.blocks.isEmpty()) {
+        //     this.cfg.entryNode = block;
+        // }
+        // this.cfg.blocks.add(block);
+        // this.cfg.irBlockMap.put(block.associatedIRBlock, block);
+        this.cfg.registerBlock(block);
+    }
+
+    public MIPSBlock getAssociatedBlock(BasicBlockBase irBlock) {
+        return this.cfg.getBlockWithAssociatedIRBlock(irBlock);
     }
 
 }

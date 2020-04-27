@@ -37,7 +37,7 @@ public abstract class BasicBlockBase implements Comparable<BasicBlockBase> {
 
 	// The following sets are populated when the CFG is constructed
 	public Set<BasicBlockBase> predecessors;
-//	public Set<BasicBlockBase> successors;
+	public Set<BasicBlockBase> successors;
 
 	// REMINDER: All blocks in dom(Bn) exist on every possible path
 	// 			 from B0 to Bn
@@ -68,7 +68,7 @@ public abstract class BasicBlockBase implements Comparable<BasicBlockBase> {
 		this.operandUses = new HashMap<>();
 
 		this.predecessors = new TreeSet<>();
-		// this.successors = new TreeSet<>();
+		this.successors = new TreeSet<>();
 
 		this.dom  = new LinkedHashSet<>();
 		// this.dom.add(this);

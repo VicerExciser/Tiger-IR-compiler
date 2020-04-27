@@ -244,30 +244,30 @@ public class ControlFlowGraph {
 
 
 		// Update successors and predecessors for all basic blocks
-		System.out.print("[CFG.build] Updating successors & predecessors for all basic blocks...");
+		// System.out.print("[CFG.build] Updating successors & predecessors for all basic blocks...");
 		for (CFGEdge edge : this.edges) {
-			// edge.start.successors.addAll(edge.end.successors);
+			edge.start.successors.addAll(edge.end.successors);
 			edge.end.predecessors.addAll(edge.start.predecessors);
 		}
-		System.out.println("  Done.");
+		// System.out.println("  Done.");
 
-		System.out.print("[CFG.build] Generating reaching def sets for all basic blocks...");
+		// System.out.print("[CFG.build] Generating reaching def sets for all basic blocks...");
 		generateReachingDefSets();
-		System.out.println("  Done.");
-		System.out.print("[CFG.build] Generating dominator tree for all basic blocks...");
+		// System.out.println("  Done.");
+		// System.out.print("[CFG.build] Generating dominator tree for all basic blocks...");
 		generateDominatorTree();
-		System.out.println("  Done.\n");
+		// System.out.println("  Done.\n");
 		// FOR DEBUG
-		this.domTree.printTree();
+		// this.domTree.printTree();
 
 		for (BasicBlockBase b : this.blocks) {
 			if (b.predecessors.contains(b))
 				b.predecessors.remove(b);
-			// if (b.successors.contains(b))
-			// 	b.successors.remove(b);
+			if (b.successors.contains(b))
+				b.successors.remove(b);
 		}
 
-		System.out.println("\n[CFG.build] FINISHED.");
+		// System.out.println("\n[CFG.build] FINISHED.");
 	}
 
 	/**		Computing Dominators (Approach 1):
@@ -633,12 +633,12 @@ public class ControlFlowGraph {
 	public void printAllBasicBlocks() {
 		IRPrinter blockPrinter = new IRPrinter(System.out);
 
-		System.out.print("Conditional branch targets: {");
-        for (BasicBlockBase block : this.blocks) {
-            if (((MaxBasicBlock)block).reachedByConditionalBranch())
-                System.out.print(" "+block+",");
-        }
-        System.out.println("}");
+		// System.out.print("Conditional branch targets: {");
+  //       for (BasicBlockBase block : this.blocks) {
+  //           if (((MaxBasicBlock)block).reachedByConditionalBranch())
+  //               System.out.print(" "+block+",");
+  //       }
+  //       System.out.println("}");
 
         System.out.println("\nCFG EDGES:");
 		for (CFGEdge edge : this.edges) {
@@ -660,23 +660,26 @@ public class ControlFlowGraph {
 				for (BasicBlockBase p : bb.predecessors) {
 					System.out.print(p + ", ");
 				}
-				// System.out.print(" }\nSUCCS("+bb+"): { ");
-				// for (BasicBlockBase s : bb.successors) {
-				// 	System.out.print(s + ", ");
-				// }
+				System.out.print(" }\nSUCCS("+bb+"): { ");
+				for (BasicBlockBase s : bb.successors) {
+					System.out.print(s + ", ");
+				}
 				System.out.println(" }\n");
 				System.out.println("PATHS FROM ROOT ["+this.entryNode+" --> "+bb+"]: {");
 				for (List<BasicBlockBase> path : block.pathsFromRoot) {
 					System.out.println("\t"+path);
 				}
 				System.out.println("}\n");
+/*
 				if (bb.iDom != null)
 					System.out.println("IDOM("+bb+") = "+bb.iDom);
 				System.out.print("DOM("+bb+"): { ");
 				for (BasicBlockBase d : bb.dom) {
 					System.out.print(d + ", ");
 				}
+
 				System.out.println(" }");
+
 				System.out.print("\nGEN("+bb+"): { ");
 				if (!bb.gen.isEmpty())
 					System.out.println();
@@ -706,8 +709,9 @@ public class ControlFlowGraph {
 					blockPrinter.printInstruction(o);
 				}
 				System.out.print("}\n");
+*/
 			}
-			System.out.println("________________________________________");
+			System.out.println("________________________________________\n");
 		}
 	}
 

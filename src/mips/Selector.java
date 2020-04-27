@@ -13,9 +13,11 @@ in Tiger-IR can be implemented using SPIM system calls.
 */
 
 import ir.*;
+import ir.cfg.*;
 import ir.datatype.*;
 import ir.operand.*;
 import mips.*;
+import mips.cfg.*;
 import mips.operand.*;
 
 import java.util.Arrays;
@@ -24,9 +26,11 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Collections;
+import java.util.Set;
 
 public class Selector {
 
+	//// TODO: Abstract out register map into a dedicated register allocator class
 	public Map<String, Register> regs;
 	// public Map<String, Addr> labelMap;
 	// public Map<String, String> irToMipsRegMap;
@@ -165,7 +169,8 @@ public class Selector {
 				associatedRegName = virtualRegName;
 
 				//// Need to initialize virtual registers before they can be used
-				curFunction.instructions.add(new MIPSInstruction(MIPSOp.LI, null, regs.get(virtualRegName), ZERO));
+				// curFunction.instructions.add(new MIPSInstruction(MIPSOp.LI, null, regs.get(virtualRegName), ZERO));
+				curFunction.addInstructionToCurrentBlock(new MIPSInstruction(MIPSOp.LI, null, regs.get(virtualRegName), ZERO));
 			} else {
 				System.out.println("[getMappedReg] ERROR: Could not assign a temporary register to operand '"+operand+"'");
 				return null;
@@ -173,6 +178,7 @@ public class Selector {
 		}
 		return regs.get(associatedRegName);
 	}
+
 
 	private Register getArgumentReg(String arg) {
 		String argRegName = null;
@@ -203,7 +209,8 @@ public class Selector {
 				argRegName = virtualArgName;
 
 				//// Need to initialize virtual registers before they can be used
-				curFunction.instructions.add(new MIPSInstruction(MIPSOp.LI, null, regs.get(virtualArgName), new Imm("0")));
+				// curFunction.instructions.add(new MIPSInstruction(MIPSOp.LI, null, regs.get(virtualArgName), new Imm("0")));
+				curFunction.addInstructionToCurrentBlock(new MIPSInstruction(MIPSOp.LI, null, regs.get(virtualArgName), new Imm("0")));
 			} else {
 				System.out.println("[getArgumentReg] ERROR: Could not assign a free register for argument '"+arg+"'");
 				// return null;
@@ -213,27 +220,47 @@ public class Selector {
 		return regs.get(argRegName);
 	}
 
+
+
 	public MIPSFunction parseFunction(IRFunction irFunction) {
 		MIPSFunction mipsFunction = new MIPSFunction(irFunction.name);
 		processedFunctions.add(mipsFunction);
 		curFunction = mipsFunction;
 
 		curFunction.labelMap.put(irFunction.name, new Addr(irFunction.name));
+		if (irFunction.returnType != null) {
+			mipsFunction.returnType = irFunction.returnType.toString();
+		}
+
+
+		ControlFlowGraph irCFG = new ControlFlowGraph(irFunction);
+		irCFG.build();
+		//// FOR DEBUG
+		irCFG.printAllBasicBlocks();
+		//// FOR DEBUG	
+		Set<BasicBlockBase> irBlocks = irCFG.getBlocks();	//// uses a LinkedHashSet data structure
+
+		mipsFunction.cfg = new MIPSCFG(irFunction.name);
+		MIPSBlock firstBlock = new MIPSBlock(mipsFunction, (MaxBasicBlock) irCFG.getEntryNode());
+		List<MIPSInstruction> prologueInstructions = new LinkedList<>();
 
 		//// Generate function name label as first instruction
-        mipsFunction.instructions.add(0, new MIPSInstruction(MIPSOp.LABEL, 
+        // mipsFunction.instructions.add(0, new MIPSInstruction(MIPSOp.LABEL, 
+        // 		irFunction.name, (MIPSOperand[]) null));
+        prologueInstructions.add(new MIPSInstruction(MIPSOp.LABEL, 
         		irFunction.name, (MIPSOperand[]) null));
 
-//---------------------------------------------------------------------------------------------------
-
-        mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.COMMENT, 
+        
+        // mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.COMMENT, 
+        prologueInstructions.add(new MIPSInstruction(MIPSOp.COMMENT, 
 					"Start of prologue", 
 					(MIPSOperand) null));
 
         /* Stack Frame Prologue Step #1: Set up current frame pointer (copy $sp to $fp) */
         //// Generate first true instruction ("move $fp, $sp")
         if ("main".equalsIgnoreCase(mipsFunction.name)) {
-	        mipsFunction.instructions.add(1, new MIPSInstruction(MIPSOp.MOVE, null, 
+	        // mipsFunction.instructions.add(1, new MIPSInstruction(MIPSOp.MOVE, null, 
+	        prologueInstructions.add(1, new MIPSInstruction(MIPSOp.MOVE, null, 
 	        		regs.get("$fp"), regs.get("$sp")));
 	    }
 
@@ -242,19 +269,19 @@ public class Selector {
 		//// UPDATE (4/22/20): mips-interpreter sometimes fails due to uninitialized registers; here's a dumb fix:
         if ("main".equalsIgnoreCase(mipsFunction.name)) {
 	        for (String regName : tempRegNames) {
-				curFunction.instructions.add(new MIPSInstruction(MIPSOp.LI, null, 
+				// curFunction.instructions.add(new MIPSInstruction(MIPSOp.LI, null, 
+				prologueInstructions.add(new MIPSInstruction(MIPSOp.LI, null, 
 						regs.get(regName), ZERO));
 			}
 		}
 
-		
         int stackFrameSize = 0;
-
-//---------------------------------------------------------------------------------------------------
 
 		/* Stack Frame Prologue Step #2: Allocate sufficient space for the Local Data Storage Section */
 		int local_data_size = SAVE_RESTORE_FROM_FP ? 40 : 0;	//// Includes space for all 10 temporary regs, so always at least 10 words in size
-//// FIXME
+
+//// FIXME (?)
+
 		if (!irFunction.variables.isEmpty()) {
 			for (IRVariableOperand irVar : irFunction.variables) {
 
@@ -285,8 +312,6 @@ public class Selector {
 
 		stackFrameSize += (local_data_size);
 
-//---------------------------------------------------------------------------------------------------
-
 		/* Stack Frame Prologue Step #3: Ensure the Local Data Segment ends on a double word boundary by inserting a Pad */
 		while (stackFrameSize % 8 != 0) {
 			stackFrameSize += 4;
@@ -316,7 +341,8 @@ public class Selector {
 
 		// mipsFunction.frameSize += (local_data_size * 4);
 		mipsFunction.frameSize = stackFrameSize;
-		mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.ADDI, null,
+		// mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.ADDI, null,
+		prologueInstructions.add(new MIPSInstruction(MIPSOp.ADDI, null,
 				regs.get("$sp"), 
 				regs.get("$sp"),
 				// new Imm(String.valueOf(local_data_size * -4))));
@@ -326,7 +352,8 @@ public class Selector {
 //// FIXME
 //// FIXME
 		if (!irFunction.parameters.isEmpty()) {
-			mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.COMMENT, 
+			// mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.COMMENT, 
+			prologueInstructions.add(new MIPSInstruction(MIPSOp.COMMENT, 
 					"Fetch arguments from stack & collapse", 
 					(MIPSOperand) null));
 			/*
@@ -363,7 +390,8 @@ public class Selector {
 
 
 				//// UPDATE (4/22/20): Stack pointer should initially be pointing to top of current stack frame
-				mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.LW, null,
+				// mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.LW, null,
+				prologueInstructions.add(new MIPSInstruction(MIPSOp.LW, null,
 						mipsParam,
 						new Addr(new Imm(String.valueOf(argOffset)), regs.get("$sp"))));
 
@@ -379,52 +407,98 @@ public class Selector {
 
 //---------------------------------------------------------------------------------------------------
 
-		if (irFunction.returnType != null) {
-			mipsFunction.returnType = irFunction.returnType.toString();
-		}
-
-		mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.COMMENT, 
+		// mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.COMMENT,
+		prologueInstructions.add(new MIPSInstruction(MIPSOp.COMMENT, 
 					"End of prologue", 
 					(MIPSOperand) null));
+
+		mipsFunction.addInstructionsToBlock(firstBlock, prologueInstructions);
 
 //---------------------------------------------------------------------------------------------------
 
 		//// Now, translate each IR instruction into MIPS counterpart(s)
+/** NOTE:   The following block is good code for when NOT using the MIPSCFG
 		for (IRInstruction irInst : irFunction.instructions) {
 			List<MIPSInstruction> parsedInst = parseInstruction(irInst, irFunction.name);
-			// for (MIPSInstruction mipsInst : parsedInst) {
-			// 	mipsFunction.instructions.add(mipsInst);
-			// }
 			mipsFunction.instructions.addAll(parsedInst);
+		}
+**/
+		//// UPDATE (4/26/20) using MIPSBlocks -- first handle the entry node
+		for (IRInstruction irInst : ((MaxBasicBlock) irCFG.getEntryNode()).instructions) {
+			mipsFunction.addInstructionsToBlock(firstBlock, parseInstruction(irInst, irFunction.name));
+		}
+		// mipsFunction.addBlock(firstBlock);
+
+		//// Next, parse instructions in each IR basic block & generate new MIPSBlock for each
+		for (BasicBlockBase irBlock : irBlocks) {
+			//// Skip entry node as it has already been processed
+			if (irBlock.equals(irCFG.getEntryNode())) {
+				continue;
+			}
+			MIPSBlock mipsBlock = new MIPSBlock(mipsFunction, (MaxBasicBlock) irBlock);
+			for (IRInstruction irInst : ((MaxBasicBlock) irBlock).instructions) {
+				List<MIPSInstruction> parsedInst = parseInstruction(irInst, irFunction.name);
+				mipsFunction.addInstructionsToBlock(mipsBlock, parsedInst);
+			}
+			// mipsFunction.addBlock(mipsBlock);
+		}
+
+		//// Finally, generate all edges between the MIPSBlocks
+		for (CFGEdge irEdge : irCFG.getEdges()) {
+			MIPSBlock start = mipsFunction.getAssociatedBlock(irEdge.start);
+			MIPSBlock end = mipsFunction.getAssociatedBlock(irEdge.end);
+			mipsFunction.cfg.edges.add(new MIPSCFGEdge(start, end));
+		}
+
+		//// Populate successors & predecessors for all MIPSBlocks
+		for (MIPSCFGEdge edge : mipsFunction.cfg.edges) {
+			edge.start.successors.addAll(edge.end.successors);
+			edge.end.predecessors.addAll(edge.start.predecessors);
+		}
+		for (MIPSBlock b : mipsFunction.cfg.blocks) {
+			if (b.predecessors.contains(b))
+				b.predecessors.remove(b);
+			if (b.successors.contains(b))
+				b.successors.remove(b);
 		}
 
 //---------------------------------------------------------------------------------------------------
 
-		mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.COMMENT, 
+		MIPSBlock finalBlock =  mipsFunction.getCurrentBlock();	// ((MIPSInstruction)(((LinkedList)(mipsFunction.getInstructions())).getLast())).parentBlock;
+		List<MIPSInstruction> epilogueInstructions = new LinkedList<>();
+
+		// mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.COMMENT, 
+		epilogueInstructions.add(new MIPSInstruction(MIPSOp.COMMENT, 
 					"Start of epilogue", 
 					(MIPSOperand) null));
-//// FIXME
+//// FIXME (?)
 		//// Collapse the stack
-		mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.ADDI, null,
+		// mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.ADDI, null,
+		epilogueInstructions.add(new MIPSInstruction(MIPSOp.ADDI, null,
 				regs.get("$sp"), 
 				regs.get("$sp"),
 				// new Imm(String.valueOf(local_data_size * 4))));
 				new Imm(String.valueOf(stackFrameSize))));
-//// FIXME
-		mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.COMMENT, 
-					"End of epilogue", 
-					(MIPSOperand) null));
+//// FIXME (?)
 
-//---------------------------------------------------------------------------------------------------
 
 		//// If not main function, append a return ("jr $ra") instruction at the end
 		if (!"main".equalsIgnoreCase(mipsFunction.name)) {
-			mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.COMMENT, 
-					"Return from subroutine " + mipsFunction.name, 
+			// mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.COMMENT, 
+			epilogueInstructions.add(new MIPSInstruction(MIPSOp.COMMENT, 
+					"Return from subroutine '" + mipsFunction.name + "'", 
 					(MIPSOperand) null));
-			mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.JR, null,
+			// mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.JR, null,
+			epilogueInstructions.add(new MIPSInstruction(MIPSOp.JR, null,
 					regs.get("$ra")));
 		}
+
+		// mipsFunction.instructions.add(new MIPSInstruction(MIPSOp.COMMENT, 
+		epilogueInstructions.add(new MIPSInstruction(MIPSOp.COMMENT, 
+					"End of epilogue", 
+					(MIPSOperand) null));
+
+		mipsFunction.addInstructionsToBlock(finalBlock, epilogueInstructions);
 
 		return mipsFunction;
 	}
