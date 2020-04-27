@@ -30,14 +30,11 @@ import java.util.Set;
 
 public class Selector {
 
-	//// TODO: Abstract out register map into a dedicated register allocator class
-	public Map<String, Register> regs;
-	// public Map<String, Addr> labelMap;
-	// public Map<String, String> irToMipsRegMap;
-	// public Map<String, Integer> assignments;
+	
 
 	public RegAllocator regAllocator;	//// MIPS Register Allocator Object
 
+	public Map<String, MIPSArray> processedArrays;
 	public List<MIPSFunction> processedFunctions;
 	public MIPSFunction curFunction;
 
@@ -48,8 +45,20 @@ public class Selector {
 	private boolean USING_SPIM = false;		//// Set false when using mips-interpreter, else true
 	private boolean SUPPORT_FLOATS = false;
 	private boolean USE_SYMBOLIC = true;
+
+	//// TODO: Abstract out register map into a dedicated register allocator class
+	
+	// public Map<String, Addr> labelMap;
+	// public Map<String, String> irToMipsRegMap;
+	// public Map<String, Integer> assignments;
+	public Map<String, Register> regs;
+	private String[] tempRegNames = {"$t0", "$t1", "$t2", "$t3", "$t4", "$t5", "$t6", "$t7", "$t8", "$t9"};
+	private Map<String, Addr> tempRegFrameOffsets;
+	private Map<String, Addr[]> tempRegOffsets;
+	private String[] argRegNames = {"$a0", "$a1", "$a2", "$a3"};
 	private static int tNum = 10;
 	private static int aNum = 4;
+
 
 	private int FP_OFFSET_T0 = -4;
 	private int FP_OFFSET_T9 = -40;
@@ -62,14 +71,11 @@ public class Selector {
 	private Imm posTempRegSpace;
 	private Imm negTempRegSpace;
 
-	private String[] tempRegNames = {"$t0", "$t1", "$t2", "$t3", "$t4", "$t5", "$t6", "$t7", "$t8", "$t9"};
-	private Map<String, Addr> tempRegFrameOffsets;
-	private Map<String, Addr[]> tempRegOffsets;
-	private String[] argRegNames = {"$a0", "$a1", "$a2", "$a3"};
+	
 	private String[] intrinsicFunctions = {"geti", "getf", "getc", "puti", "putf", "putc"};
 	private Map<String, Imm> systemServiceCodes;
 
-	public Map<String, MIPSArray> processedArrays;
+	
 
 	public Selector(int registerAllocationMode) { 
 		// labelMap = new HashMap<>();
@@ -89,8 +95,8 @@ public class Selector {
 		negTempRegSpace = new Imm("-40");
 
 		this.regAllocator = new RegAllocator(registerAllocationMode);
-
-		initializeRegisters();
+		this.regs = regAllocator.registers;
+		// initializeRegisters();
 
 		if (SAVE_RESTORE_FROM_FP) {
 			tempRegFrameOffsets = new HashMap<>();
@@ -1295,7 +1301,7 @@ public class Selector {
 	}
 
 
-
+/*
 	private void initializeRegisters() {
 		regs = new HashMap<>();
 
@@ -1337,6 +1343,7 @@ public class Selector {
 	private void createRealReg(String name) {
 		regs.put(name, new Register(name, false));
 	}
+*/
 
 	private void initializeSystemServices() {
 		systemServiceCodes = new HashMap<>();

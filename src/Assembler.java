@@ -1,13 +1,54 @@
 /**		Expected Command Line Arguments:
 
-- Required command line argument (args[0]): Tiger-IR file with extension ".ir"
+- Required command line argument (args[0]): 
+	Absolute or relative path to an input Tiger-IR file with extension ".ir"
 
-- Optional command line argument (args[1]): integer (0 or 1) to specify register allocation mode;
-												0 for naive allocation (default), or
-												1 for intra-block register allocation.
+- Optional command line argument (args[1]): 
+	"-O" followed immediately by an integer (0 or 1) to specify a register allocation mode:
+	 	-->		"-O0" to enable NAIVE allocation (default setting), or
+	 	-->		"-O1" to enable INTRA-BLOCK register allocation.
 
-- Optional command line argument (args[2]): output file name/path for the resulting MIPS program 
-												to be written to
+	^ NOTE: The "-O" prefix is optional (can just pass the integer 0 or 1) for the second arg
+	^ NOTE: The second arg for mode is actually entirely optional, as "-O0" will be used by default
+
+- Optional command line argument (args[2]): 
+	An output file name/path for the resulting MIPS program to be written to
+
+	^ NOTE: If no output filename/path is given, the output filename will be the same as the input
+			filename with the ".ir" extension replaced by ".s"
+	^ NOTE: By default, output files will be saved to a folder called "mips_output/" relative
+			to the Tiger-IR-compiler project root directory (i.e., "Tiger-IR-compiler/mips_output/");
+			this default output directory will be automatically created if it does not exist
+
+
+How To Build Project in 3 Different Ways (from Tiger-IR-compiler project root directory):
+
+	1)	mkdir build
+		find src -name "*.java" > sources.txt
+		javac -d build @sources.txt
+
+	2)	./build.sh
+
+	3) 	./run.sh  (will call build.sh)
+
+
+Synopsis:
+	
+	java -cp ./build Assembler <input/IR/filepath> [-O<register allocation mode>] [optional/output/filepath]
+	java -cp ./build Assembler [yourInputFilePath].ir -O[0 | 1] [pathForOutputFile].s 
+
+
+How To Run in 5 Different Ways (from Tiger-IR-compiler project root directory):
+
+	1)	java -cp ./build Assembler input_file_path.ir -O0 output_file_path.s
+
+	2)	./run.sh test_cases/quicksort/quicksort.ir
+
+	3)	./run.sh test_cases/quicksort/quicksort.ir 1
+
+	4)	./run.sh test_cases/quicksort/quicksort.ir -O0
+
+	5)	./run.sh test_cases/quicksort/quicksort.ir -O1 output_dir/mips_quicksort.s
 **/
 import ir.*;
 import mips.*;
@@ -37,6 +78,7 @@ public class Assembler {
 	
 
 	public static void main(String[] args) throws Exception {
+
 		Assembler assembler;
 
 		if (args.length < 1) {
@@ -50,7 +92,7 @@ public class Assembler {
 			}
 			//// Ensure args[1] is numeric
 			try {
-				Integer num = Integer.parseInt(args[1]);
+				Integer num = Integer.parseInt(args[1].replaceAll("-O",""));
 			} catch (NumberFormatException nfe) {
 				System.out.println("[ERROR] Invalid Argument #1: Register allocation mode must be an integer (given: '"+args[1]+"')"+supportedModesMsg);
 				System.exit(1);
@@ -78,7 +120,7 @@ public class Assembler {
 				if (args.length > 2) {
 					outfile = args[2];
 				}
-				assembler = new Assembler(args[0], Integer.parseInt(args[1]), outfile);
+				assembler = new Assembler(args[0], Integer.parseInt(args[1].replaceAll("-O","")), outfile);
 			} else {
 				assembler = new Assembler(args[0], 0, null);
 			}
