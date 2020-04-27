@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.NoSuchElementException;
 
 public class MIPSFunction {
 	
@@ -89,7 +90,15 @@ public class MIPSFunction {
     }
 
     public MIPSBlock getCurrentBlock() {
-        return ((MIPSInstruction) (((LinkedList) (this.instructions)).getLast())).parentBlock;
+        MIPSBlock curBlock = null;
+        try {
+            curBlock = ((MIPSInstruction) (((LinkedList) (this.instructions)).getLast())).parentBlock;
+        } catch (NoSuchElementException nsee) {   //// Indicative of an empty list of instructions
+            for (MIPSBlock block : this.cfg.blocks) {
+                curBlock = block;
+            }
+        }
+        return curBlock;
     }
 
     public void addInstructionToCurrentBlock(MIPSInstruction inst) {
