@@ -4,6 +4,9 @@ public class Register extends MIPSOperand {
 
     public String name;
     public boolean isVirtual;
+    public boolean inUse;
+    public boolean prevInUse;
+    // List<MIPSInstruction> references;
 
     public Register(String name) {
         this(name, true);
@@ -12,6 +15,8 @@ public class Register extends MIPSOperand {
     public Register(String name, boolean isVirtual) {
         this.name = name;
         this.isVirtual = isVirtual;
+        this.inUse = false;
+        this.prevInUse = false;
     }
 
     @Override

@@ -63,14 +63,6 @@ public class MIPSFunction {
         // 		new Register("$fp", false), new Register("$sp", false)));
     }
 
-    public void printRegisterMapping() {
-        System.out.println("\n Register Mapping for Function "+name+":\n");
-        for (String key : this.irToMipsRegMap.keySet()) {
-            System.out.println("\t"+key+"  <--->  "+irToMipsRegMap.get(key).toString());
-        }
-        System.out.println("\n");
-    }
-
 
     /* i.e., blocks for the function "main" can be identified as
     "main_B0", "main_B1", "main_B2", etc.
@@ -128,16 +120,29 @@ public class MIPSFunction {
     }
 
     public void addBlock(MIPSBlock block) {
-        // if (this.cfg.blocks.isEmpty()) {
-        //     this.cfg.entryNode = block;
-        // }
-        // this.cfg.blocks.add(block);
-        // this.cfg.irBlockMap.put(block.associatedIRBlock, block);
+/*
+        if (this.cfg.blocks.isEmpty()) {
+            this.cfg.entryNode = block;
+        }
+        this.cfg.blocks.add(block);
+        this.cfg.irBlockMap.put(block.associatedIRBlock, block);
+*/
         this.cfg.registerBlock(block);
     }
 
     public MIPSBlock getAssociatedBlock(BasicBlockBase irBlock) {
         return this.cfg.getBlockWithAssociatedIRBlock(irBlock);
+    }
+
+
+    public void printRegisterMapping() {
+        String banner = "\n________________________________\n";
+        System.out.println(banner + " Register Mapping for Function "+name+":\n");
+        for (String key : this.irToMipsRegMap.keySet()) {
+            // System.out.println("\t"+key+"  <--->  "+irToMipsRegMap.get(key).toString());
+            System.out.println("\t"+irToMipsRegMap.get(key).toString()+"  <--->  "+key);
+        }
+        System.out.println(banner);
     }
 
 }

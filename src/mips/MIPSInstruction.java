@@ -48,7 +48,9 @@ public class MIPSInstruction {
     public MIPSOp op;
     public String label;
     public List<MIPSOperand> operands;
-    public MIPSBlock parentBlock;
+    public MIPSBlock parentBlock;       //// parentBlock assigned when the MIPSInstruction is appended to a MIPSBlock
+    public boolean usesVirtualReg;
+    public List<Register> virtualRegOperands;
 
     public MIPSInstruction(MIPSOp op, String label, MIPSOperand... operands) {
         this.op = op;
@@ -69,12 +71,25 @@ public class MIPSInstruction {
                     this.operands = Arrays.asList(operands);
             }
         }
-        // if (op == DIRECTIVE || op == SYSCALL || op == LABEL || op == NOP) {
-        //     this.operands = new ArrayList<>();
-        // }
-        // else {
-        //     this.operands = Arrays.asList(operands);
-        // }
+        
+        this.usesVirtualReg = false;
+        this.virtualRegOperands = null;
+        if (!this.operands.isEmpty()) {
+            for (MIPSOperand operand : this.operands) {
+                if (operand instanceof Register) {
+                    if (((Register) operand).isVirtual) {
+                        if (!this.usesVirtualReg) {
+                            this.usesVirtualReg = true;
+                        }
+                        if (this.virtualRegOperands == null) {
+                            this.virtualRegOperands = new ArrayList<>();
+                        }
+                        this.virtualRegOperands.add((Register) operand);
+                    }
+                }
+            }
+        }
+
     }
 
     public boolean isBranch() {
@@ -87,6 +102,27 @@ public class MIPSInstruction {
                 return true;
             default:
                 return false;
+        }
+    }
+
+    public boolean hasVariableOperands() {
+        // if (label != null) return false;
+        switch(op) {
+            case DIRECTIVE:
+            case SYSCALL:
+            case LABEL:
+            case NOP:
+            case JAL:
+            case J:
+                return false;
+            default:
+                /*
+                return label == null;
+                if (label != null) {
+                    return false;
+                }
+                */
+                return true;
         }
     }
 

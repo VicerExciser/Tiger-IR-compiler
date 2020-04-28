@@ -78,6 +78,7 @@ public class MIPSFile {
 
 
 	public void addFunction(MIPSFunction function) {
+		this.functions.add(function);
 		// for (MIPSInstruction instruction : function.getInstructions()) {
 		//		append(instruction);
 		// }
@@ -140,7 +141,7 @@ public class MIPSFile {
 		Path outPath = Paths.get(path);
 
 		if (Files.notExists(outPath)) {  // || !Files.isDirectory(dirPath)) {
-			System.out.println("[MIPSFile::validatePath] ERROR: Path '"+path+"' does not exist; creating now!");
+			// System.out.println("[MIPSFile::validatePath] ERROR: Path '"+path+"' does not exist; creating now!");
 			
 			if (outPath.getFileName().toString().indexOf(".s") >= 0) {
 				// int nameCount = outPath.getNameCount();

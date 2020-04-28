@@ -77,6 +77,7 @@ public class MIPSInterpreter {
         writeRegister("$s0", 0);
 
         writeRegister("zero", 0);
+        writeRegister("$zero", 0);
 
         // populate floating point regs
         for (int i = 0; i < 32; i++) {

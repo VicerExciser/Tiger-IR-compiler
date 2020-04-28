@@ -73,6 +73,7 @@ public class Assembler {
 	private Path currentWorkingDir;
 	
 	private IRProgram inFile;
+	private RegAllocator allocator;
 	private Selector selector;
 	private MIPSFile program;
 	
@@ -156,8 +157,10 @@ public class Assembler {
 		}
 
 		inFile = reader.parseIRFile(filename);
-		selector = new Selector(allocMode);	// Instruction selector
-		program = new MIPSFile(outName);	// Output MIPS/SPIM program file
+		// selector = new Selector(allocMode);	//// Instruction selector
+		allocator = new RegAllocator(allocMode);	//// Register allocator	
+		selector = new Selector(allocator);			//// Instruction selector
+		program = new MIPSFile(outName);			//// Output MIPS/SPIM program file
 
 		if (FULL_PATH_OUTPUT_FILE) {
 			if (USE_DEFAULT_OUTPUT_DIR) {
@@ -169,7 +172,7 @@ public class Assembler {
 		}
 
 		//// FOR DEBUG
-		System.out.println("[Assember::Constructor] in-filename: "+filename+",\n  out-filename: "+program.name);
+		// System.out.println("[Assember::Constructor] in-filename: "+filename+",\n  out-filename: "+program.name);
 		//// FOR DEBUG
 
 	}
@@ -192,7 +195,7 @@ public class Assembler {
 			program.addFunction(newFunction);
 
 			//// FOR DEBUG
-			newFunction.printRegisterMapping();
+			// newFunction.printRegisterMapping();
 		}
 
 		for (IRFunction function : inFile.functions) {
@@ -207,7 +210,7 @@ public class Assembler {
 				program.addFunction(newFunction);
 
 				//// FOR DEBUG
-				newFunction.printRegisterMapping();
+				// newFunction.printRegisterMapping();
 			}
 			else {
 				for (IRInstruction oldInst : function.instructions) {
@@ -221,6 +224,15 @@ public class Assembler {
 		}
 
 
+		//// FOR DEBUG
+		for (MIPSFunction func : program.functions) {
+			func.printRegisterMapping();
+		}
+
+		allocator.printAllRegisters();
+		//// FOR DEBUG
+
+
 		program.finalizeProgramFile();
 
 		Path progPath = Paths.get(program.name);  //.toAbsolutePath().normalize();
@@ -231,10 +243,7 @@ public class Assembler {
 		System.out.println("\n[ Assembler finished - program written to '" + outPathStr + "' ]");
 	
 
-		//// FOR DEBUG
-		// for (MIPSFunction func : program.functions) {
-		// 	func.printRegisterMapping();
-		// }
+
 
 	}
 
