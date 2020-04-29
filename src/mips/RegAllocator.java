@@ -7,11 +7,15 @@ import mips.operand.*;
 import java.util.Map;
 import java.util.HashMap;
 
-public class RegAllocator {
+public class RegAllocator {		//// Singleton
+
+	private static RegAllocator singletonInstance = null;
 
 	private boolean USE_VIRTUAL = true;
 	private boolean PRINTS_ENABLED = true;
+	private boolean STRONG_ARM = true;
 	private static int tNum = 10;
+	private static int reallocCtr = 0;
 	
 	public enum Mode {
 		NAIVE,
@@ -29,7 +33,7 @@ public class RegAllocator {
 	public String[] argRegNames = {"$a0", "$a1", "$a2", "$a3"};
 
 
-	public RegAllocator(int allocationMode) {
+	private RegAllocator(int allocationMode) {
 		if (allocationMode >= Mode.size || allocationMode < 0) {
 			if (PRINTS_ENABLED) {
 	            System.out.println("[RegAllocator] INVALID MODE SETTING: "
@@ -50,6 +54,20 @@ public class RegAllocator {
         this.virtualRegs = new HashMap<>();
 	}
 
+	public static RegAllocator getInstance(int allocationMode) {
+		if (singletonInstance == null) {
+			singletonInstance = new RegAllocator(allocationMode);
+		}
+		return singletonInstance;
+	}
+
+	public static RegAllocator getInstance() {
+		if (singletonInstance == null) {
+			singletonInstance = new RegAllocator(-1);
+		}
+		return singletonInstance;
+	}
+
 
 	public String findUnusedRegName(MIPSFunction curFunction) {
 		if (curFunction != null) {
@@ -63,15 +81,57 @@ public class RegAllocator {
 		return null;
 	}
 
-	//// FIXME: Registers never getting unlocked!
+
+	//// FIXME: Make damn sure that Registers are getting unlocked!
 	public String findUnusedRegName() {
 		for (String name : tempRegNames) {
+		// for (int i = 0; i < tempRegNames.length; i++) {		//// Will iteratively check for free reg in order
+		// 	String name = "$t" + String.valueOf(i);
 			if (!this.registers.get(name).inUse) {
 				return name;
 			}
 		}
 		return null;
 	}
+
+
+	public void freeRegister(String regName) {
+		freeRegister(registers.get(regName));
+	}
+
+	public void freeRegister(Register reg) {
+		reg.inUse = false;
+
+		//// TODO: Should this ensure that all irToMipsReg mappings for this register are deleted?
+
+	}
+
+	public void lockRegister(String regName) {
+		lockRegister(registers.get(regName));
+	}
+
+	public void lockRegister(Register reg) {
+		reg.inUse = true;
+	}
+
+
+	//// Locks/reserves & returns one of the 10 physical temporary registers (if any are available)
+	public Register getUnusedRegNaive() {
+		if (this.mode != Mode.NAIVE) {
+			return null;
+		}
+		String regName = findUnusedRegName();
+		if (regName == null) {
+			System.out.println("\n  !!! [getUnusedRegNaive]  ERROR  ERROR  ERROR  !!!\n");
+			return null;
+		}
+		Register availableReg = registers.get(regName);
+		lockRegister(availableReg);
+		return availableReg;
+	}
+
+
+
 
 	public Register getMappedRegForFunction(String operand, MIPSFunction curFunction) {
 		String associatedRegName = null;
@@ -104,8 +164,15 @@ public class RegAllocator {
 				//// Need to initialize virtual registers before they can be used (?)
 				// curFunction.addInstructionToCurrentBlock(new MIPSInstruction(MIPSOp.LI, null, virtualReg, new Imm("0")));
 			} else {
-				System.out.println("[getMappedReg] ERROR: Could not assign a temporary register to operand '"+operand+"'");
-				return tReg;
+				if (STRONG_ARM) {
+					associatedRegName = "$t" + String.valueOf(reallocCtr);
+					reallocCtr = (reallocCtr + 1) % tempRegNames.length;
+					curFunction.irToMipsRegMap.put(operand, associatedRegName);
+					curFunction.getCurrentBlock().irToMipsRegMap.put(operand, associatedRegName);
+				} else {
+					System.out.println("[getMappedRegForFunction] ERROR: Could not assign a temporary register to operand '"+operand+"'");
+					return tReg;
+				}
 			}
 		}
 		tReg = registers.get(associatedRegName);
@@ -115,7 +182,7 @@ public class RegAllocator {
 
 
 	//// FIX-ME
-	public Register getMappedReg(String operand, MIPSBlock curBlock) {
+	public Register getMappedRegForBlock(String operand, MIPSBlock curBlock) {
 		String associatedRegName = null;
 		Register tReg = null;
 		if (curBlock == null) {
@@ -162,8 +229,15 @@ public class RegAllocator {
 				//// Need to initialize virtual registers before they can be used (?)
 				// curFunction.addInstructionToCurrentBlock(new MIPSInstruction(MIPSOp.LI, null, virtualReg, new Imm("0")));
 			} else {
-				System.out.println("[getMappedReg] ERROR: Could not assign a temporary register to operand '"+operand+"'");
-				return tReg;
+				if (STRONG_ARM) {
+					associatedRegName = "$t" + String.valueOf(reallocCtr);
+					reallocCtr = (reallocCtr + 1) % tempRegNames.length;
+					curBlock.parentFunction.irToMipsRegMap.put(operand, associatedRegName);
+					curBlock.irToMipsRegMap.put(operand, associatedRegName);
+				} else {
+					System.out.println("[getMappedRegForBlock] ERROR: Could not assign a temporary register to operand '"+operand+"'");
+					return tReg;
+				}
 
 				//// TODO: Spill candidate registers to the stack to free them up
 			}

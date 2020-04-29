@@ -64,5 +64,28 @@ public class MIPSCFG {
     	return null;
     }
 
+    public void computeLiveSets() {
+    	//// Using the worklist iterative algorithm
+
+    }
+
+    private void computeLiveinLiveout() {
+    	/*	Data-flow problems are expressed as simultaneous equations:
+				
+				LIVEOUT(b) = ∪s∈succ(b) LIVEIN(s)		<--- use IMEDIATE (touching) successors
+				LIVEIN(b) = UEVAR(b) ∪ (LIVEOUT(b) - VARKILL(b))
+			
+			where
+				
+				UEVAR(b) is the set of names used in block b before being defined
+						in b (Upwards Exposed Variables)
+
+				VARKILL(b) is the set of variables assigned in b
+
+			Solve the equations using a fixed-point iterative scheme.
+    	*/
+
+    }
+
 
 }

@@ -1,8 +1,8 @@
 .text
     #  ---- { BLOCK  'main_B0'  BEGIN } ---- 
 main: 
-    move $fp, $sp
     # Start of prologue
+    move $fp, $sp
     li $t0, 0
     li $t1, 0
     li $t2, 0
@@ -16,32 +16,45 @@ main:
     addi $sp, $sp, -416
     # End of prologue
     li $t0, 0
+    sw $t0, 12($sp)
     # read_int
     li $v0, 5
     syscall
-    move $t2, $v0
-    li $t3, 100
-    bgt $t2, $t3, return_main
+    move $t0, $v0
+    sw $t0, 4($sp)
+    lw $t0, 4($sp)
+    li $t1, 100
+    bgt $t0, $t1, return_main
     #  ---- { BLOCK  'main_B0'  END } ---- 
     #  ---- { BLOCK  'main_B1'  BEGIN } ---- 
-    li $t3, 1
-    sub $t2, $t2, $t3
-    li $t1, 0
+    lw $t1, 4($sp)
+    li $t2, 1
+    sub $t0, $t1, $t2
+    sw $t0, 4($sp)
+    li $t0, 0
+    sw $t0, 8($sp)
     #  ---- { BLOCK  'main_B1'  END } ---- 
     #  ---- { BLOCK  'main_B2'  BEGIN } ---- 
 loop0_main: 
-    bgt $t1, $t2, exit0_main
+    lw $t0, 8($sp)
+    lw $t1, 4($sp)
+    bgt $t0, $t1, exit0_main
     #  ---- { BLOCK  'main_B2'  END } ---- 
     #  ---- { BLOCK  'main_B3'  BEGIN } ---- 
     # read_int
     li $v0, 5
     syscall
     move $t0, $v0
-    la $t4, -400($fp)
-    sll $t5, $t1, 2
-    add $t4, $t4, $t5
-    sw $t0, ($t4)
-    addi $t1, $t1, 1
+    sw $t0, 12($sp)
+    la $t0, -400($fp)
+    lw $t1, 8($sp)
+    sll $t2, $t1, 2
+    add $t0, $t0, $t2
+    lw $t3, 12($sp)
+    sw $t3, ($t0)
+    lw $t1, 8($sp)
+    addi $t0, $t1, 1
+    sw $t0, 8($sp)
     j loop0_main
     #  ---- { BLOCK  'main_B3'  END } ---- 
     #  ---- { BLOCK  'main_B4'  BEGIN } ---- 
@@ -58,22 +71,25 @@ exit0_main:
     sw $t7, 28($sp)
     sw $t8, 32($sp)
     sw $t9, 36($sp)
-    move $s6, $fp
+    move $s7, $fp
     addi $sp, $sp, -4
     sw $ra, 0($sp)
     # Pushing function call args onto stack
     addi $sp, $sp, -4
-    sw $t6, 0($sp)
     addi $sp, $sp, -4
-    sw zero, 0($sp)
+    lw $t0, 0($sp)
+    sw $t0, 0($sp)
     addi $sp, $sp, -4
-    sw $t2, 0($sp)
+    sw $zero, 0($sp)
+    addi $sp, $sp, -4
+    lw $t1, 64($sp)
+    sw $t1, 0($sp)
     # Calling subroutine 'quicksort'
     jal quicksort
     addi $sp, $sp, 12
     lw $ra, 0($sp)
     addi $sp, $sp, 4
-    move $fp, $s6
+    move $fp, $s7
     # Restoring temporary regs
     lw $t9, 36($sp)
     lw $t8, 32($sp)
@@ -86,32 +102,40 @@ exit0_main:
     lw $t1, 4($sp)
     lw $t0, 0($sp)
     addi $sp, $sp, 40
-    li $t1, 0
+    li $t9, 0
+    sw $t9, 12($sp)
     #  ---- { BLOCK  'main_B4'  END } ---- 
     #  ---- { BLOCK  'main_B5'  BEGIN } ---- 
 loop1_main: 
-    bgt $t1, $t2, exit1_main
+    lw $t9, 12($sp)
+    lw $t8, 8($sp)
+    bgt $t9, $t8, exit1_main
     #  ---- { BLOCK  'main_B5'  END } ---- 
     #  ---- { BLOCK  'main_B6'  BEGIN } ---- 
-    la $t4, -400($fp)
-    sll $t5, $t1, 2
-    add $t4, $t4, $t5
-    lw $t0, ($t4)
+    la $t9, -400($fp)
+    lw $t8, 12($sp)
+    sll $t7, $t8, 2
+    add $t9, $t9, $t7
+    lw $t6, ($t9)
+    sw $t6, 16($sp)
     # print_int
     li $v0, 1
-    move $a0, $t0
+    lw $t9, 16($sp)
+    move $a0, $t9
     syscall
     # print_char
     li $v0, 11
     li $a0, 10
     syscall
-    addi $t1, $t1, 1
+    lw $t8, 12($sp)
+    addi $t9, $t8, 1
+    sw $t9, 12($sp)
     j loop1_main
     #  ---- { BLOCK  'main_B6'  END } ---- 
     #  ---- { BLOCK  'main_B7'  BEGIN } ---- 
 exit1_main: 
 return_main: 
-    # Start of epilogue
+    # Start of epilogue -- Collapse the stack
     addi $sp, $sp, 416
     # End of epilogue
     #  ---- { BLOCK  'main_B7'  END } ---- 
@@ -124,71 +148,108 @@ return_main:
 quicksort: 
     # Start of prologue
     addi $sp, $sp, -440
-    # Fetch arguments from stack & collapse
+    # Fetch arguments off of the stack
     lw $t9, 440($sp)
     lw $t8, 444($sp)
-    lw $a0, 448($sp)
+    lw $t7, 448($sp)
+    sw $t9, 36($sp)
+    sw $t7, -464($sp)
+    sw $t8, 32($sp)
     # End of prologue
-    li $t1, 0
-    li $t0, 0
-    bge $t8, $t9, end_quicksort
+    li $t9, 0
+    sw $t9, -404($sp)
+    li $t9, 0
+    sw $t9, 0($sp)
+    lw $t9, 32($sp)
+    lw $t8, 36($sp)
+    bge $t9, $t8, end_quicksort
     #  ---- { BLOCK  'quicksort_B0'  END } ---- 
     #  ---- { BLOCK  'quicksort_B1'  BEGIN } ---- 
-    add $t3, $t8, $t9
-    li $t10quicksort, 0
-    li $t10quicksort, 2
-    div $t3, $t3, $t10quicksort
-    li $t11quicksort, 0
-    li $t12quicksort, 0
-    la $t11quicksort, -400($fp)
-    sll $t12quicksort, $t3, 2
-    add $t11quicksort, $t11quicksort, $t12quicksort
-    lw $t2, ($t11quicksort)
-    li $t10quicksort, 1
-    sub $t1, $t8, $t10quicksort
-    addi $t0, $t9, 1
+    lw $t8, 32($sp)
+    lw $t7, 36($sp)
+    add $t9, $t8, $t7
+    sw $t9, 12($sp)
+    lw $t8, 12($sp)
+    li $t7, 2
+    div $t9, $t8, $t7
+    sw $t9, 12($sp)
+    la $t9, -400($fp)
+    lw $t8, 12($sp)
+    sll $t7, $t8, 2
+    add $t9, $t9, $t7
+    lw $t6, ($t9)
+    sw $t6, 8($sp)
+    lw $t8, 32($sp)
+    li $t7, 1
+    sub $t9, $t8, $t7
+    sw $t9, -404($sp)
+    lw $t8, 36($sp)
+    addi $t9, $t8, 1
+    sw $t9, 0($sp)
     #  ---- { BLOCK  'quicksort_B1'  END } ---- 
     #  ---- { BLOCK  'quicksort_B2'  BEGIN } ---- 
 loop0_quicksort: 
 loop1_quicksort: 
-    addi $t1, $t1, 1
-    li $t13quicksort, 0
-    la $t11quicksort, -400($fp)
-    sll $t13quicksort, $t1, 2
-    add $t11quicksort, $t11quicksort, $t13quicksort
-    lw $t4, ($t11quicksort)
-    move $t7, $t4
-    blt $t7, $t2, loop1_quicksort
+    lw $t8, -404($sp)
+    addi $t9, $t8, 1
+    sw $t9, -404($sp)
+    la $t9, -400($fp)
+    lw $t8, -404($sp)
+    sll $t7, $t8, 2
+    add $t9, $t9, $t7
+    lw $t6, ($t9)
+    sw $t6, 16($sp)
+    lw $t9, 16($sp)
+    move $t8, $t9
+    sw $t8, 28($sp)
+    lw $t9, 28($sp)
+    lw $t8, 8($sp)
+    blt $t9, $t8, loop1_quicksort
     #  ---- { BLOCK  'quicksort_B2'  END } ---- 
     #  ---- { BLOCK  'quicksort_B3'  BEGIN } ---- 
 loop2_quicksort: 
-    li $t10quicksort, 1
-    sub $t0, $t0, $t10quicksort
-    li $t14quicksort, 0
-    la $t11quicksort, -400($fp)
-    sll $t14quicksort, $t0, 2
-    add $t11quicksort, $t11quicksort, $t14quicksort
-    lw $t4, ($t11quicksort)
-    move $t6, $t4
-    bgt $t6, $t2, loop2_quicksort
+    lw $t8, 0($sp)
+    li $t7, 1
+    sub $t9, $t8, $t7
+    sw $t9, 0($sp)
+    la $t9, -400($fp)
+    lw $t8, 0($sp)
+    sll $t7, $t8, 2
+    add $t9, $t9, $t7
+    lw $t6, ($t9)
+    sw $t6, 16($sp)
+    lw $t9, 16($sp)
+    move $t8, $t9
+    sw $t8, 24($sp)
+    lw $t9, 24($sp)
+    lw $t8, 8($sp)
+    bgt $t9, $t8, loop2_quicksort
     #  ---- { BLOCK  'quicksort_B3'  END } ---- 
     #  ---- { BLOCK  'quicksort_B4'  BEGIN } ---- 
-    bge $t1, $t0, exit0_quicksort
+    lw $t9, -404($sp)
+    lw $t8, 0($sp)
+    bge $t9, $t8, exit0_quicksort
     #  ---- { BLOCK  'quicksort_B4'  END } ---- 
     #  ---- { BLOCK  'quicksort_B5'  BEGIN } ---- 
-    la $t11quicksort, -400($fp)
-    sll $t14quicksort, $t0, 2
-    add $t11quicksort, $t11quicksort, $t14quicksort
-    sw $t7, ($t11quicksort)
-    la $t11quicksort, -400($fp)
-    sll $t13quicksort, $t1, 2
-    add $t11quicksort, $t11quicksort, $t13quicksort
-    sw $t6, ($t11quicksort)
+    la $t9, -400($fp)
+    lw $t8, 0($sp)
+    sll $t7, $t8, 2
+    add $t9, $t9, $t7
+    lw $t6, 28($sp)
+    sw $t6, ($t9)
+    la $t9, -400($fp)
+    lw $t8, -404($sp)
+    sll $t7, $t8, 2
+    add $t9, $t9, $t7
+    lw $t6, 24($sp)
+    sw $t6, ($t9)
     j loop0_quicksort
     #  ---- { BLOCK  'quicksort_B5'  END } ---- 
     #  ---- { BLOCK  'quicksort_B6'  BEGIN } ---- 
 exit0_quicksort: 
-    addi $t5, $t0, 1
+    lw $t8, 0($sp)
+    addi $t9, $t8, 1
+    sw $t9, 20($sp)
     # Saving temporary regs
     addi $sp, $sp, -40
     sw $t9, 36($sp)
@@ -201,22 +262,25 @@ exit0_quicksort:
     sw $t2, 8($sp)
     sw $t1, 4($sp)
     sw $t0, 0($sp)
-    move $s6, $fp
+    move $s7, $fp
     addi $sp, $sp, -4
     sw $ra, 0($sp)
     # Pushing function call args onto stack
     addi $sp, $sp, -4
-    sw $a0, 0($sp)
+    lw $t9, -416($sp)
+    sw $t9, 0($sp)
     addi $sp, $sp, -4
+    lw $t8, 84($sp)
     sw $t8, 0($sp)
     addi $sp, $sp, -4
-    sw $t0, 0($sp)
+    lw $t7, 56($sp)
+    sw $t7, 0($sp)
     # Calling subroutine 'quicksort'
     jal quicksort
     addi $sp, $sp, 12
     lw $ra, 0($sp)
     addi $sp, $sp, 4
-    move $fp, $s6
+    move $fp, $s7
     # Restoring temporary regs
     lw $t0, 0($sp)
     lw $t1, 4($sp)
@@ -229,7 +293,9 @@ exit0_quicksort:
     lw $t8, 32($sp)
     lw $t9, 36($sp)
     addi $sp, $sp, 40
-    addi $t0, $t0, 1
+    lw $t1, 0($sp)
+    addi $t0, $t1, 1
+    sw $t0, 0($sp)
     # Saving temporary regs
     addi $sp, $sp, -40
     sw $t0, 0($sp)
@@ -242,22 +308,25 @@ exit0_quicksort:
     sw $t7, 28($sp)
     sw $t8, 32($sp)
     sw $t9, 36($sp)
-    move $s6, $fp
+    move $s7, $fp
     addi $sp, $sp, -4
     sw $ra, 0($sp)
     # Pushing function call args onto stack
     addi $sp, $sp, -4
-    sw $a0, 0($sp)
-    addi $sp, $sp, -4
+    lw $t0, -416($sp)
     sw $t0, 0($sp)
     addi $sp, $sp, -4
-    sw $t9, 0($sp)
+    lw $t1, 52($sp)
+    sw $t1, 0($sp)
+    addi $sp, $sp, -4
+    lw $t2, 92($sp)
+    sw $t2, 0($sp)
     # Calling subroutine 'quicksort'
     jal quicksort
     addi $sp, $sp, 12
     lw $ra, 0($sp)
     addi $sp, $sp, 4
-    move $fp, $s6
+    move $fp, $s7
     # Restoring temporary regs
     lw $t9, 36($sp)
     lw $t8, 32($sp)
@@ -273,7 +342,7 @@ exit0_quicksort:
     #  ---- { BLOCK  'quicksort_B6'  END } ---- 
     #  ---- { BLOCK  'quicksort_B7'  BEGIN } ---- 
 end_quicksort: 
-    # Start of epilogue
+    # Start of epilogue -- Collapse the stack
     addi $sp, $sp, 440
     # Return from subroutine 'quicksort'
     jr $ra

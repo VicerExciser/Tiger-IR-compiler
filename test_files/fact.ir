@@ -1,0 +1,29 @@
+#start_function
+int fact(int n):
+int-list: acc, ctr
+float-list:
+	assign, acc, 1
+	assign, ctr, n
+loop:
+	brleq, done, ctr, 1
+	mult, acc, acc, ctr
+	call, puti, ctr
+	call, putc, 32
+	call, puti, acc
+	call, putc, 10
+	sub, ctr, ctr, 1
+	goto, loop
+done:
+	return, acc
+#end_function
+
+#start_function
+void main():
+int-list: x, y, z
+float-list:
+	callr, x, geti
+	callr, z, fact, x
+	assign, x, z
+	call, puti, x
+	call, putc, 10
+#end_function

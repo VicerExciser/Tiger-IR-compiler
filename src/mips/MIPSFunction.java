@@ -64,6 +64,25 @@ public class MIPSFunction {
     }
 
 
+    public String getVarNameForRegister(Register varReg) {
+        return getVarNameForRegister(varReg.name);
+    }
+
+    public String getVarNameForRegister(String varRegName) {
+        //// Attempt a reverse lookup in the function's irToMipsRegMap mappings
+        String variableName = null;
+        if (irToMipsRegMap.containsValue(varRegName)) {
+            for (String key : irToMipsRegMap.keySet()) {
+                if (varRegName.equals(irToMipsRegMap.get(key))) {
+                    variableName = key;
+                    break;
+                }
+            }
+        }
+        return variableName;
+    }
+
+
     /* i.e., blocks for the function "main" can be identified as
     "main_B0", "main_B1", "main_B2", etc.
     */

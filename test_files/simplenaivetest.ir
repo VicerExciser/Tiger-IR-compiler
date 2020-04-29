@@ -1,0 +1,10 @@
+#start_function
+void main():
+int-list: x, y, z
+float-list:
+	assign, x, 1
+	assign, y, x
+	add, z, x, y
+	call, puti, z
+	call, putc, 10
+#end_function

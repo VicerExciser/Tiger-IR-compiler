@@ -31,6 +31,12 @@ public class MIPSBlock implements Comparable<MIPSBlock> {
 	public Map<String, LiveRange> varLiveRangeMap;
 	public Map<String, String> irToMipsRegMap;		//// Primarily populated via RegAllocator.getMappedReg() function
 	
+	public Set<MIPSBlock> liveOut;
+	public Set<MIPSBlock> liveIn;
+	public Set<String> ueVarSet;	//// Upwards Exposed Variables: The set of names used 
+									//// in this block before being defined in this block
+	public Set<String> killVarSet;	//// The set of variables assigned in this block
+
 	// public int size;
 	// public MIPSInstruction leader;
 	// public MIPSInstruction terminator;
@@ -50,6 +56,10 @@ public class MIPSBlock implements Comparable<MIPSBlock> {
 		this.irToMipsRegMap = new HashMap<>();
 		this.predecessors = new TreeSet<>();
 		this.successors = new TreeSet<>();
+		this.liveOut = new LinkedHashSet<>();
+		this.liveIn = new LinkedHashSet<>();
+		this.ueVarSet = new LinkedHashSet<>();
+		this.killVarSet = new LinkedHashSet<>();
 
 		this.parentFunction.addBlock(this);		//// New blocks automatically added to parent function's CFG
 
@@ -61,7 +71,59 @@ public class MIPSBlock implements Comparable<MIPSBlock> {
 	public void appendInstruction(MIPSInstruction inst) {
 		if (this.instructions.add(inst)) {		//// .add() will fail for duplicates
 			inst.parentBlock = this;
+
+			//// Add any variable assignments/definitions to this block's killVar set
+			Register locallyAssigned = inst.getWrite();
+			if (locallyAssigned != null && locallyAssigned.name.startsWith("$t")) {
+				
+				String varName = getVarNameForRegister(locallyAssigned);
+				if (varName == null) {
+					varName = parentFunction.getVarNameForRegister(locallyAssigned);
+				}
+				if (varName != null) {
+					killVarSet.add(varName);
+
+					if (irToMipsRegMap.get(varName) == null) {
+						registerLocalVariable(varName, locallyAssigned.name);
+					} else {
+						addVar(varName);
+					}
+				}
+
+				//// TEMPORARY IMPLEMENTATION - FOR DEBUG
+				else {
+					if (RegAllocator.getInstance().mode != RegAllocator.Mode.NAIVE) {
+						System.out.println("\n  ~~~ [appendInstruction] " + this.toString()
+								+ " failed to find the IR variable name associated with"
+								+ " a local assignment to physical register " 
+								+ locallyAssigned.toString() + " ~~~\n");
+					}
+				}
+				//// TEMPORARY IMPLEMENTATION - FOR DEBUG
+
+			}
+
 		}
+
+	}
+
+
+	public String getVarNameForRegister(Register varReg) {
+		return getVarNameForRegister(varReg.name);
+	}
+
+	public String getVarNameForRegister(String varRegName) {
+		//// Attempt a reverse lookup in the block's irToMipsRegMap mappings
+		String variableName = null;
+		if (irToMipsRegMap.containsValue(varRegName)) {
+			for (String key : irToMipsRegMap.keySet()) {
+				if (varRegName.equals(irToMipsRegMap.get(key))) {
+					variableName = key;
+					break;
+				}
+			}
+		}
+		return variableName;
 	}
 
 	public int size() {
@@ -101,7 +163,9 @@ public class MIPSBlock implements Comparable<MIPSBlock> {
 	}
 
 
-	public void postProcess(RegAllocator allocator) {
+	public void postProcess() {
+
+		RegAllocator allocator = RegAllocator.getInstance();
 
 		//// FOR DEBUG
 		for (String v : localVariables) {
@@ -118,6 +182,14 @@ public class MIPSBlock implements Comparable<MIPSBlock> {
 		}
 		//// FOR DEBUG
 
+		/**
+			Live range is defined with respect to a variable:
+			The live range of variable c starts from a definition of variable c and goes until  
+			the next definition of the variable (in which place the variable gets killed, 
+			or defined as a different variable, if you are using SSA), 
+			or the end of the scope (block, function or program) that variable c exists.
+		**/
+
 		//// Perform live-range analysis for all local variables:
 		MIPSInstruction[] blockInstructions = getInstructionsArray();
 
@@ -129,7 +201,7 @@ public class MIPSBlock implements Comparable<MIPSBlock> {
 			//// from point p to some use of v along which v is not redefined. 
 
 			// Register vReg = allocator.registers.get(irToMipsRegMap.get(v));
-			Register vReg = allocator.getMappedReg(v, this);
+			Register vReg = allocator.getMappedRegForBlock(v, this);
 
 			for (int i = 0; i < blockInstructions.length; i++) {
 				curInst = blockInstructions[i];

@@ -158,7 +158,8 @@ public class Assembler {
 
 		inFile = reader.parseIRFile(filename);
 		// selector = new Selector(allocMode);	//// Instruction selector
-		allocator = new RegAllocator(allocMode);	//// Register allocator	
+		// allocator = new RegAllocator(allocMode);	//// Register allocator	
+		allocator = RegAllocator.getInstance(allocMode);	//// Register allocator	
 		selector = new Selector(allocator);			//// Instruction selector
 		program = new MIPSFile(outName);			//// Output MIPS/SPIM program file
 
@@ -225,11 +226,13 @@ public class Assembler {
 
 
 		//// FOR DEBUG
+		/*
 		for (MIPSFunction func : program.functions) {
 			func.printRegisterMapping();
 		}
 
 		allocator.printAllRegisters();
+		*/
 		//// FOR DEBUG
 
 
