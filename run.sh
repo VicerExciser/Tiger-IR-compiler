@@ -2,7 +2,7 @@
 RAMODE=0
 if [[ $# -lt 1 ]]; then 
 	# echo "MISSING ARG: Must specify input .ir file"
-	# exit
+	# exit    
 	IRFILE="src/test.ir" 
 else
 	IRFILE="$1" 
