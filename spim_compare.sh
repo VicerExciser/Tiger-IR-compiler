@@ -2,7 +2,7 @@
 if [[ $# -lt 1 ]]; then
 	echo "[ ERROR ] Missing Arg:  .s filepath"
 	exit 1
-fi
+fi    
 
 TESTPATH="$1"
 if [[ ! -f "$TESTPATH" ]]; then
