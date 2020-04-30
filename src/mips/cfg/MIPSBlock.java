@@ -3,18 +3,23 @@ package mips.cfg;
 import mips.*;
 import mips.cfg.*;
 import mips.operand.*;
+import ir.*;
 import ir.cfg.*;
+import ir.operand.*;
 
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
 
 public class MIPSBlock implements Comparable<MIPSBlock> {
 
+	// public static boolean ONLY_COMPUTE_VARSETS_ON_ADD = false;
+	public static boolean CHECK_UEVAR_ON_ADD = true;
 	public static int BLOCKNUM = 0;		//// Static counter for total # of blocks overall
 	
 	public MIPSFunction parentFunction;
@@ -31,11 +36,12 @@ public class MIPSBlock implements Comparable<MIPSBlock> {
 	public Map<String, LiveRange> varLiveRangeMap;
 	public Map<String, String> irToMipsRegMap;		//// Primarily populated via RegAllocator.getMappedReg() function
 	
-	public Set<MIPSBlock> liveOut;
-	public Set<MIPSBlock> liveIn;
+	public Set<String> liveOut;		//// LIVEOUT(b): the set of variables that are live on exit from block b
+	public Set<String> liveIn;
 	public Set<String> ueVarSet;	//// Upwards Exposed Variables: The set of names used 
 									//// in this block before being defined in this block
 	public Set<String> killVarSet;	//// The set of variables assigned in this block
+	public Set<String[]> interferingVars;
 
 	// public int size;
 	// public MIPSInstruction leader;
@@ -60,6 +66,7 @@ public class MIPSBlock implements Comparable<MIPSBlock> {
 		this.liveIn = new LinkedHashSet<>();
 		this.ueVarSet = new LinkedHashSet<>();
 		this.killVarSet = new LinkedHashSet<>();
+		this.interferingVars = new LinkedHashSet<>();
 
 		this.parentFunction.addBlock(this);		//// New blocks automatically added to parent function's CFG
 
@@ -72,37 +79,202 @@ public class MIPSBlock implements Comparable<MIPSBlock> {
 		if (this.instructions.add(inst)) {		//// .add() will fail for duplicates
 			inst.parentBlock = this;
 
+			//// Add any Upwards Exposed Variables to this block's ueVarSet:
+			//// -> names being used (i.e., read) as source operands that have not yet been assigned a  
+			////	value by any previous instruction within this block, indicative that the name has  
+			////	been inherited from (i.e., assigned a value in) some predecessor block.
+			//// Check for UE vars before searching for a killed var because instructions are added to a
+			//// MIPSBlock sequentially and in order, thus all previous assignments should be in the killVarSet
+			if (MIPSBlock.CHECK_UEVAR_ON_ADD) {
+				Register [] locallyUsed = inst.getReads();
+				if (locallyUsed.length > 0) {
+					String[] usedNames = inst.getUsedNames();
+					for (int i = 0; i < usedNames.length; i++) {
+						if (!killVarSet.contains(usedNames[i])) {
+							//// Should be safe to assume then that usedNames[i] is "upwards exposed"
+							ueVarSet.add(usedNames[i]);
+						}
+						if (!irToMipsRegMap.containsKey(usedNames[i])) {
+							registerLocalVariable(usedNames[i], locallyUsed[i].name);
+						} else {
+							addVar(usedNames[i]);
+						}
+					}
+				}
+			}
+
 			//// Add any variable assignments/definitions to this block's killVar set
 			Register locallyAssigned = inst.getWrite();
 			if (locallyAssigned != null && locallyAssigned.name.startsWith("$t")) {
 				
-				String varName = getVarNameForRegister(locallyAssigned);
-				if (varName == null) {
-					varName = parentFunction.getVarNameForRegister(locallyAssigned);
-				}
+				// String varName = getVarNameForRegister(locallyAssigned);
+				// if (varName == null) {
+				// 	varName = parentFunction.getVarNameForRegister(locallyAssigned);
+				// }
+				// String varName = inst.getDefinedName();
+				String varName = inst.getNameForReg(locallyAssigned);
 				if (varName != null) {
+
+					//// FOR DEBUG
+					if (varName != inst.getDefinedName()) {
+						System.out.println("\n  ~~~ [appendInstruction] ERROR#0: " + this.toString()
+								+ " MIPSInstruction::getNameForReg(r) returned a different name"
+								+ " than MIPSInstruction::getDefinedName()!\n\tReturned reg. name:  '"
+								+ varName + "'\n\tExpected reg. name:  '" + inst.getDefinedName() 
+								+ "'\n\tInstruction:  '" + locallyAssigned.toString() + "'\n ~~~\n");
+					}
+					//// FOR DEBUG
+
 					killVarSet.add(varName);
 
-					if (irToMipsRegMap.get(varName) == null) {
+					if (!irToMipsRegMap.containsKey(varName)) {
 						registerLocalVariable(varName, locallyAssigned.name);
 					} else {
 						addVar(varName);
 					}
 				}
-
+				/*
 				//// TEMPORARY IMPLEMENTATION - FOR DEBUG
 				else {
 					if (RegAllocator.getInstance().mode != RegAllocator.Mode.NAIVE) {
-						System.out.println("\n  ~~~ [appendInstruction] " + this.toString()
+						System.out.println("\n  ~~~ [appendInstruction] ERROR#1: " + this.toString()
 								+ " failed to find the IR variable name associated with"
 								+ " a local assignment to physical register " 
 								+ locallyAssigned.toString() + " ~~~\n");
 					}
 				}
 				//// TEMPORARY IMPLEMENTATION - FOR DEBUG
-
+				*/
 			}
 
+		}
+
+	}
+
+	public void insertInstructionAtIdx(MIPSInstruction inst, int idx) {
+		List<MIPSInstruction> blockInstructions = new ArrayList<>(this.instructions);
+		this.instructions.clear();
+		blockInstructions.add(idx, inst);
+		// this.instructions = new LinkedHashSet<>(blockInstructions);
+		this.instructions.addAll(blockInstructions);
+	}
+
+	public int getInstructionIdx(MIPSInstruction inst) {
+		MIPSInstruction[] instArray = getInstructionsArray();
+		for (int idx = 0; idx < instArray.length; idx++) {
+			if (instArray[idx].equals(inst)) {
+				return idx;
+			}
+		}
+		return -1;
+	}
+
+	//// Returns the live range that has the highest number of uses in the block
+	public LiveRange getRangeWithMostUses() {
+		int maxSize = -1;
+		LiveRange maxRange = null;
+		for (String name : varLiveRangeMap.keySet()) {
+			if (varLiveRangeMap.get(name).programPoints.size() > maxSize) {
+				maxSize = varLiveRangeMap.get(name).programPoints.size();
+				maxRange = varLiveRangeMap.get(name);
+			}
+		}
+		return maxRange;
+	}
+
+	public LiveRange getRangeWithLeastUses() {
+		int minSize = this.size();
+		LiveRange minRange = null;
+		for (String name : varLiveRangeMap.keySet()) {
+			Map<Integer, MIPSInstruction> points = varLiveRangeMap.get(name).programPoints;
+			if (points.isEmpty()) return varLiveRangeMap.get(name);
+			if (points.size() < minSize) {
+				minSize = points.size();
+				minRange = varLiveRangeMap.get(name);
+			}
+		}
+		return minRange;
+	}
+
+	/*	Data-flow problems are expressed as simultaneous equations:
+				
+			LIVEOUT(b) = ∪s∈succ(b) LIVEIN(s)		<--- use IMMEDIATE (touching) successors
+			LIVEIN(b) = UEVAR(b) ∪ (LIVEOUT(b) - VARKILL(b))
+			
+		where
+				
+			UEVAR(b) is the set of names used in block b before being defined
+					in b (Upwards Exposed Variables)
+
+			VARKILL(b) is the set of variables assigned in b
+
+		Solve the equations using a fixed-point iterative scheme.
+	*/
+	public void computeLiveOut() {
+		this.liveOut = new LinkedHashSet<>();
+		for (MIPSBlock s : this.successors) {
+			this.liveOut.addAll(s.liveIn);
+		}
+	}
+
+	public void computeLiveIn() {
+		this.liveIn = new LinkedHashSet<>(this.liveOut);
+		this.liveIn.removeAll(this.killVarSet);
+		this.liveIn.addAll(this.ueVarSet);
+	}
+
+	public void computeUEAndKillSets() {
+		Map<String, Boolean> hasBeenDefined = new HashMap<>();
+		for (IRInstruction i : this.associatedIRBlock.instructions) {
+
+			//// Check any source operands first (used names) ...
+			for (IRVariableOperand usedVar : IRUtil.getSourceOperands(i)) {
+				if (usedVar == null) continue;
+				String usedName = usedVar.toString();
+
+				//// If variable is being used before being defined earlier within 
+				//// the block, then it is an Upwards Exposed Variable
+				if (hasBeenDefined.containsKey(usedName)) {
+					if (hasBeenDefined.get(usedName) == false) {
+						this.ueVarSet.add(usedName);
+					}
+				} else {
+					hasBeenDefined.put(usedName, false);
+				}
+			}
+
+			//// ... Then, check the destination operand (defined name) if there is one
+			if (IRUtil.isDefinition(i)) {
+				String definedName = i.operands[0].toString();
+				hasBeenDefined.put(definedName, true);
+				this.killVarSet.add(definedName);
+			}
+
+		}
+
+	}
+
+	/**	
+		Two values "interfere" if there exists a program point where both are simultaneously live.
+		Vars x and y cannot occupy the same register at any point where they interfere.
+	
+	**/
+	public void computeInterference() {
+		//// Variables v1 and v2 interfere if there exists a LIVEIN(b) or
+		//// LIVEOUT(b) set that contains both v1 and v2
+		this.interferingVars.clear();
+		for (String v1 : localVariables) {
+			if (v1 == null) continue;
+			for (String v2 : localVariables) {
+				if (v2 == null) continue;
+				if (v1.equals(v2)) continue;
+				if (liveIn.contains(v1) && liveIn.contains(v2)) {
+					interferingVars.add(new String[]{v1, v2});
+				}
+				if (liveOut.contains(v1) && liveOut.contains(v2)) {
+					interferingVars.add(new String[]{v1, v2});
+				}
+			}
 		}
 
 	}
@@ -166,7 +338,7 @@ public class MIPSBlock implements Comparable<MIPSBlock> {
 	public void postProcess() {
 
 		RegAllocator allocator = RegAllocator.getInstance();
-
+/*
 		//// FOR DEBUG
 		for (String v : localVariables) {
 			if (!irToMipsRegMap.keySet().contains(v)) {
@@ -181,6 +353,7 @@ public class MIPSBlock implements Comparable<MIPSBlock> {
 			}
 		}
 		//// FOR DEBUG
+*/
 
 		/**
 			Live range is defined with respect to a variable:
@@ -193,61 +366,179 @@ public class MIPSBlock implements Comparable<MIPSBlock> {
 		//// Perform live-range analysis for all local variables:
 		MIPSInstruction[] blockInstructions = getInstructionsArray();
 
-		for (String v : localVariables) {
-			MIPSInstruction curInst;
-			MIPSInstruction nextInst;
+		//// Reverse instructions to scan from bottom up
+		// Collections.reverse(Arrays.asList(blockInstructions));
 
+		//// Double-check that all local variables are accounted for...
+		for (MIPSInstruction inst : instructions) {
+			//// Remove non-temporary registers from the instruction's associatedNames mapping:
+			if (inst.associatedNames != null) {
+				ArrayList<String> toRemove = new ArrayList<>();
+				for (String regName : inst.associatedNames.keySet()) {
+					if (!regName.startsWith("$t")) {
+						toRemove.add(regName);
+					}
+				}
+				for (String regName : toRemove) {
+					inst.associatedNames.remove(regName);
+				}
+			}
+
+			for (String used : inst.getUsedNames()) {
+				addVar(used);
+			}
+			addVar(inst.getDefinedName());
+		}
+
+		//// For each local variable, iterate all block instructions in order to generate a LiveRange
+		//// representation for that value & its lifespan within the block
+		for (String v : localVariables) {
+			MIPSInstruction curInst = null;
+			MIPSInstruction nextInst = null;
+
+			MIPSInstruction firstLivePoint = null;
+			MIPSInstruction lastLivePoint = null;
+
+			int liveStartIdx = -1;		//// Index of first block instruction where var is live
+			int liveEndIdx = -1;		//// (relative to ONLY the associated MIPSBlock's instructions Set)
+
+			LiveRange liveRange = null;
+				
 			//// A value v is live at program point p (i.e., a MIPSInstruction) if ∃ a path 
 			//// from point p to some use of v along which v is not redefined. 
 
 			// Register vReg = allocator.registers.get(irToMipsRegMap.get(v));
-			Register vReg = allocator.getMappedRegForBlock(v, this);
+			// Register vReg = allocator.getMappedRegForBlock(v, this);
 
 			for (int i = 0; i < blockInstructions.length; i++) {
 				curInst = blockInstructions[i];
-				// if (!curInst.hasVariableOperands()) {
-/*	
-	curInst.getWrite():  Returns 1 destination register (or null if none)
-	curInst.getReads():  Returns an array of source registers (or array of length 0 if none)
-*/
-				Register destReg = curInst.getWrite();
-				Register[] srcRegs = curInst.getReads();
-				if (destReg == null || srcRegs.length == 0) {
-					continue;
-				}
-
-				boolean live = destReg.equals(vReg);
-				if (!live) {
-					for (int k = 0; k < srcRegs.length; k++) {
-						live = live || srcRegs[k].equals(vReg);
+/*
+				boolean live = false;
+				String[] uses = curInst.getUsedNames();
+				if (uses.length > 0) {
+					for (int u = 0; u < uses.length; u++) {
+						if (v.equals(uses[u])) {
+							live = true;
+						}
 					}
 				}
+
+				String def = curInst.getDefinedName();
+				if (def != null) {
+					live |= v.equals(def);
+				}
+				
 				if (!live) {
 					continue;
 				}
+*/
 
-				//// TODO: FINISH ME!
+//// TODO: RECHECK LOGIC HERE:
+				if (firstLivePoint != null) {
+					liveRange.programPoints.put(i, blockInstructions[i]);
+					continue;
+				}
 
+				if (!isVariableLiveAtPoint(v, curInst)) {
+					continue;
+				}
 
-				for (int j = i+1; j < blockInstructions.length; j++) {
+				if (varLiveRangeMap.containsKey(v)) {
+					liveRange = varLiveRangeMap.get(v);
+				} else {
+					liveRange = new LiveRange(v);
+				}
+
+				//// Found the first instruction in which variable v is either used or defined
+				if (firstLivePoint == null) {
+					firstLivePoint = blockInstructions[i];
+					liveStartIdx = i;
+					// liveRange.programPoints.put(liveStartIdx, firstLivePoint);
+					liveRange.startInst = firstLivePoint;
+					liveRange.startIdx = liveStartIdx;
+				} 
+				
+				liveRange.programPoints.put(i, blockInstructions[i]);
+				
+
+				//// Now search the following instructions within the block from the bottom-up to
+				//// identify the last use of the variable within the block
+				// for (int j = i+1; j < blockInstructions.length; j++) {
+				for (int j = blockInstructions.length-1; j > i; j--) {
 					nextInst = blockInstructions[j];
-					if (nextInst.getWrite() == null || nextInst.getReads().length == 0) {
+					if (lastLivePoint != null) {
+						liveRange.programPoints.put(j, blockInstructions[j]);	
 						continue;
 					}
-
-					//// FOR DEBUG
-					// System.out.println(blockInstructions[i] + " - " + blockInstructions[j]);
-					//// FOR DEBUG
-
-
+					if (!isVariableLiveAtPoint(v, nextInst)) {
+						continue;
+					}
+					// if (Arrays.asList(nextInst.getUsedNames()).contains(v)) {
+						if (lastLivePoint == null) {
+							lastLivePoint = blockInstructions[j];
+							liveEndIdx = j;
+							liveRange.endInst = lastLivePoint;
+							liveRange.endIdx = liveEndIdx;
+						}
+						liveRange.programPoints.put(j, blockInstructions[j]);	
+					// }
 				}
 			}
 		}
 	}
 
+	private boolean isVariableLiveAtPoint(String varName, MIPSInstruction point) {
+		if (varName == null || point == null) return false;
+		boolean live = false;
+		String[] uses = point.getUsedNames();
+		if (uses.length > 0) {
+			for (int u = 0; u < uses.length; u++) {
+				if (varName.equals(uses[u])) {
+					live = true;
+					return live;
+				}
+			}
+		}
+		String def = point.getDefinedName();
+		if (def != null) {
+			live |= varName.equals(def);
+		}
+		return live;
+	}
+
+	public boolean isVariableUsedPastPoint(String varName, MIPSInstruction point) {
+		if (varName == null || point == null) return false;
+		MIPSInstruction[] blockInstructions = getInstructionsArray();
+		boolean pointReached = false;
+		boolean futureUseFound = false;
+
+		for (int i = getInstructionIdx(point); i < blockInstructions.length; i++) {
+			if (pointReached) {
+				for (String used : blockInstructions[i].getUsedNames()) {
+					if (varName.equals(used)) {
+						return true;
+					}
+				}
+			}
+
+			//// TODO: Utilize LiveIn/Out sets
+
+			if (blockInstructions[i].equals(point)) {
+				pointReached = true;
+			}
+		}
+
+		return futureUseFound;
+	}
 
 	public void dumpInfo() {
 
+	}
+
+	public void printAllLiveRanges() {
+		for (LiveRange range : varLiveRangeMap.values()) {
+			System.out.println(range.toString());
+		}
 	}
 
 	public void printRegisterMapping() {

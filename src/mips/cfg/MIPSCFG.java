@@ -9,6 +9,8 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Deque;
+import java.util.LinkedList;
 
 public class MIPSCFG {
 	
@@ -64,28 +66,54 @@ public class MIPSCFG {
     	return null;
     }
 
+    public MIPSBlock getBlockWithMaximalLiveRange() {
+    	int maxSize = -1;
+    	MIPSBlock maxBlock = null;
+    	for (MIPSBlock block : this.blocks) {
+    		LiveRange maxRange = block.getRangeWithMostUses();
+    		if (maxRange.programPoints.size() > maxSize) {
+    			maxSize = maxRange.programPoints.size();
+    			maxBlock = block;
+    		}
+    	}
+    	return maxBlock;
+    }
+
     public void computeLiveSets() {
     	//// Using the worklist iterative algorithm
+    	Deque<MIPSBlock> worklist = new LinkedList<>(this.blocks);
+
+    	//// Initialize all LIVEINs and LIVEOUTs to empty sets
+    	for (MIPSBlock block : worklist) {
+    		block.liveIn.clear();
+    		block.liveOut.clear();
+    		// block.computeUEVar();
+    		// block.computeVarKill();
+    		block.computeUEAndKillSets();
+    	}
+
+    	while (worklist.peek() != null) {
+    		MIPSBlock b = worklist.poll();
+    		Set<String> prevLiveIn = new LinkedHashSet<>(b.liveIn);
+
+    		//// Compute LIVEOUT(b) and LIVEIN(b)
+    		b.computeLiveOut();
+    		b.computeLiveIn();
+
+    		//// If LIVEIN(b) changed at all, then add pred(b) to the worklist
+    		if (!(b.liveIn.containsAll(prevLiveIn) && prevLiveIn.containsAll(b.liveIn))) {
+    			for (MIPSBlock pred : b.predecessors) {
+    				if (!worklist.contains(pred)) {
+    					worklist.add(pred);
+    				}
+    			}
+    		}
+    	}
+
+    	for (MIPSBlock block : this.blocks) {
+    		block.computeInterference();
+    	}
 
     }
-
-    private void computeLiveinLiveout() {
-    	/*	Data-flow problems are expressed as simultaneous equations:
-				
-				LIVEOUT(b) = ∪s∈succ(b) LIVEIN(s)		<--- use IMEDIATE (touching) successors
-				LIVEIN(b) = UEVAR(b) ∪ (LIVEOUT(b) - VARKILL(b))
-			
-			where
-				
-				UEVAR(b) is the set of names used in block b before being defined
-						in b (Upwards Exposed Variables)
-
-				VARKILL(b) is the set of variables assigned in b
-
-			Solve the equations using a fixed-point iterative scheme.
-    	*/
-
-    }
-
 
 }

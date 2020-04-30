@@ -57,14 +57,12 @@ public class Spill {
 					(currently the latter design choice... relying on the caller for $sp management)
 
 	**/
-	// public void spillRegister(List<MIPSInstruction> instList, Register sourceReg, String irVariableName) {
 	public MIPSInstruction spillRegister(Register sourceReg, String irVariableName) {
 		this.variableName = irVariableName;
 		// spillRegister(instList, sourceReg);
 		return spillRegister(sourceReg);
 	}
 
-	// public void spillRegister(List<MIPSInstruction> instList, Register sourceReg) {
 	public MIPSInstruction spillRegister(Register sourceReg) {
 		//// "sw Rs, Addr"
 		Addr spillLocation = getLocationOnStack();
@@ -73,10 +71,9 @@ public class Spill {
 				null, 
 				sourceReg,
 				spillLocation);
+		spillInstruction.associatedNames.put(sourceReg.name, this.variableName);
 
 		sourceReg.inUse = false;		//// Should Spill object be responsible for register lock/unlocking?
-
-		// instList.add(spillInstruction);
 		return spillInstruction;
 	}
 
@@ -92,9 +89,9 @@ public class Spill {
 				null,
 				destinationReg,
 				spillLocation);
+		unspillInstruction.associatedNames.put(destinationReg.name, this.variableName);
 
 		destinationReg.inUse = true;	//// Should Spill object be responsible for register lock/unlocking?
-
 		return unspillInstruction;
 	}
 

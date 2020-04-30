@@ -58,6 +58,7 @@ public class LiveRange {
 			}
 		});
 
+		/*
 		//// FOR DEBUG
 		System.out.println(" | LiveRange("+varName+") |");
 		for (Integer idx : sortedKeys) {
@@ -65,8 +66,25 @@ public class LiveRange {
 					+ programPoints.get(idx));
 		}
 		//// FOR DEBUG
+		*/
 
 		return sortedKeys;
+	}
+
+	@Override
+	public String toString() {
+		StringBuilder builder = new StringBuilder();
+		builder.append(" | LiveRange(");
+		builder.append(varName);
+		builder.append(") |");
+		for (Integer idx : getSortedInstructionIndexList()) {
+			builder.append("  blockInstructions[");
+			builder.append(String.valueOf(idx));
+			builder.append("] = ");
+			builder.append(programPoints.get(idx));
+		}
+		builder.append("\n");
+		return builder.toString();
 	}
 
 }

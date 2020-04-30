@@ -5,8 +5,9 @@ public class Register extends MIPSOperand {
     public String name;
     public boolean isVirtual;
     public boolean inUse;
-    public boolean prevInUse;
+    public boolean prevInUse;   //// TODO: Perhaps make this a stack for the sake of recursive calls
     // List<MIPSInstruction> references;
+    public boolean reservedForSpill;
 
     public Register(String name) {
         this(name, true);
@@ -17,6 +18,7 @@ public class Register extends MIPSOperand {
         this.isVirtual = isVirtual;
         this.inUse = false;
         this.prevInUse = false;
+        this.reservedForSpill = false;
     }
 
     @Override

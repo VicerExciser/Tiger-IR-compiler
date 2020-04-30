@@ -6,6 +6,8 @@ import mips.operand.*;
 import java.util.Arrays;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
 import java.lang.StringBuilder;
 
 public class MIPSInstruction {
@@ -52,6 +54,11 @@ public class MIPSInstruction {
     public boolean usesVirtualReg;
     public List<Register> virtualRegOperands;
 
+    //// This structure will map the name of a MIPSOperand (i.e., Register) to the name of
+    //// the original IROperand (i.e., IRVariableOperand) for which the register was allocated
+    public Map<String, String> associatedNames;
+
+
     public MIPSInstruction(MIPSOp op, String label, MIPSOperand... operands) {
         this.op = op;
         this.label = label;
@@ -89,6 +96,8 @@ public class MIPSInstruction {
                 }
             }
         }
+
+        this.associatedNames = hasVariableOperands() ? new HashMap<>() : null;
 
     }
 
@@ -166,6 +175,29 @@ public class MIPSInstruction {
 
         return builder.toString();
     }
+
+
+    public String getDefinedName() {
+        Register definition = getWrite();
+        if (definition == null) return null;
+        return this.associatedNames.get(definition.name);
+    }
+
+    public String[] getUsedNames() {
+        Register[] sources = getReads();
+        String[] names = new String[sources.length];
+        // if (sources.length == 0) return names;
+        for (int i = 0; i < sources.length; i++) {
+            names[i] = this.associatedNames.get(sources[i].name);
+        }
+        return names;
+    }
+
+    public String getNameForReg(Register readReg) {
+        return this.associatedNames.get(readReg.name);
+    }
+
+
 
     public Register[] getReads() {
         Register[] reads;

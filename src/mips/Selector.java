@@ -93,7 +93,8 @@ public class Selector {
 		// assignments = new HashMap<>();
 
 		processedFunctions = new LinkedList<>();
-		spilledRegMap = new HashMap<>();
+		// spilledRegMap = new HashMap<>();
+		this.spilledRegMap = regAllocator.spilledRegMap;
 		curFunction = null;
 		curBlock = null;
 
@@ -143,19 +144,28 @@ public class Selector {
 	//// CALL THIS EVERY TIME THE STACK GROWS / $sp IS DECREMENTED (i.e., "addi $sp, $sp, -16")
 	//// stackPointerChange value MUST be a multiple of 4 as it represents a number of bytes!
 	public void incrementAllSpillOffsets(int stackPointerChange) {
+/*
 		int delta = Math.abs(stackPointerChange);
 		for (Spill location : spilledRegMap.values()) {
 			location.spOffset += delta;
 		} 
+*/
+		regAllocator.incrementAllSpillOffsets(stackPointerChange);
 	}
 
 	//// CALL THIS EVERY TIME THE STACK SHRINKS / $sp IS INCREMENTED (i.e., "addi $sp, $sp, 16")
 	public void decrementAllSpillOffsets(int stackPointerChange) {
+/*
 		int delta = Math.abs(stackPointerChange);
 		for (Spill location : spilledRegMap.values()) {
 			location.spOffset -= delta;
 		} 
+*/
+		regAllocator.decrementAllSpillOffsets(stackPointerChange);
 	}
+
+//// TODO: ^ Look into whether Spills are ever removed from spilledRegMap & if that effects program
+
 
 
 	private String findUnusedRegName() {
@@ -263,6 +273,18 @@ public class Selector {
 	}
 */
 
+	public void allocateWordOnStack(List<MIPSInstruction> parsedInst) {
+		parsedInst.add(allocateWordOnStack());
+	}
+
+	public MIPSInstruction allocateWordOnStack() {
+		//// "addi $sp, $sp, -4"
+		return new MIPSInstruction(MIPSOp.ADDI, null, 
+				regs.get("$sp"), 
+				regs.get("$sp"),
+				negWordSize);
+	}
+
 
 	public Register getNaiveReg(String operandName, List<MIPSInstruction> parsedInst, 
 								List<Register> naivelyAllocatedRegs, boolean loadValue) {
@@ -273,10 +295,11 @@ public class Selector {
 		if (stackLocation == null) {
 
 			//// Allocate a word on the stack where the variable's value will persist
-			parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
-					regs.get("$sp"), 
-					regs.get("$sp"),
-					negWordSize));
+			// parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
+			// 		regs.get("$sp"), 
+			// 		regs.get("$sp"),
+			// 		negWordSize));
+			allocateWordOnStack(parsedInst);
 
 			//// Adjust all Spill stack pointer offsets accordingly since the stack has grown
 			incrementAllSpillOffsets(4);
@@ -408,7 +431,8 @@ public class Selector {
 						// mipsVar = regAllocator.getUnusedRegNaive();
 
 					} else {
-						mipsVar = getMappedReg(varName);	// , curBlock);
+						// mipsVar = getMappedReg(varName);	// , curBlock);
+						mipsVar = getMappedReg(varName, curBlock);
 						mipsFunction.variables.add(mipsVar);
 					}
 
@@ -524,7 +548,8 @@ public class Selector {
 
 				} else {
 					// MIPSOperand mipsParam = getArgumentReg(irParam.toString());
-					mipsParam = getMappedReg(irParam.toString());	// , curBlock);
+					// mipsParam = getMappedReg(irParam.toString());	// , curBlock);
+					mipsParam = getMappedReg(irParam.toString(), curBlock);
 					// mipsFunction.parameters.add(mipsParam);
 //// REG-ALLOC TODO
 
@@ -646,19 +671,25 @@ public class Selector {
 			MIPSBlock start = mipsFunction.getAssociatedBlock(irEdge.start);
 			MIPSBlock end = mipsFunction.getAssociatedBlock(irEdge.end);
 			mipsFunction.cfg.edges.add(new MIPSCFGEdge(start, end));
+			start.successors.add(end);
+			end.predecessors.add(start);
 		}
+		//// ^ BUG FIX: Only add immediate successor(s)/predecessor(s)
 
+		/*
 		//// Populate successors & predecessors for all MIPSBlocks
 		for (MIPSCFGEdge edge : mipsFunction.cfg.edges) {
 			edge.start.successors.addAll(edge.end.successors);
 			edge.end.predecessors.addAll(edge.start.predecessors);
 		}
+		*/
 		for (MIPSBlock b : mipsFunction.cfg.blocks) {
 			if (b.predecessors.contains(b))
 				b.predecessors.remove(b);
 			if (b.successors.contains(b))
 				b.successors.remove(b);
 		}
+
 
 //---------------------------------------------------------------------------------------------------
 
@@ -711,7 +742,8 @@ public class Selector {
 
 
 
-		if (!naiveAllocation) {
+		if (!naiveAllocation) {		//// Unsure if any of this block variable checking is needed...
+/*
 			//// Ensure no local variables were missed or incorrectly added for each basic block
 			for (BasicBlockBase bb : irCFG.getBlocks()) {
 
@@ -746,11 +778,13 @@ public class Selector {
 					}
 					
 				}
+*/
 
+/*
 				//// Some function-wide variables may have been inadvertantly added to the first
 				//// MIPSBlock (the entryNode) when parsing their declarations earlier in this
 				//// function; remove any variables that do not truly exist within the block
-				List<String> excludeList = new LinkedList<>(/*mipsFunction.variables*/);
+				List<String> excludeList = new LinkedList<>();
 				for (MIPSOperand v : mipsFunction.variables) {
 
 					String irVarName = null;
@@ -783,29 +817,36 @@ public class Selector {
 
 				}
 
-				/*	LinkedList methods for basic set operations:
-						INTERSECTION: set1.retainAll(set2)
-							--> will remove any element from set1 if it is not in set2
-							( SET1 = SET1 ∩ SET2 )
-						SUBTRACTION: set1.removeAll(set2)
-							--> will remove any element from set1 if it is in set2
-							( SET1 = SET1 - SET2 )
-						UNION: set1.addAll(set2)
-							--> will add any element from set2 to set1 if it does not already exist in set1
-							( SET1 = SET1 ∪ SET2 )
-				*/
+					//// List & Set methods for basic set operations:
+					//// 	INTERSECTION: set1.retainAll(set2)
+					//// 		--> will remove any element from set1 if it is not in set2
+					//// 		( SET1 = SET1 ∩ SET2 )
+					//// 	SUBTRACTION: set1.removeAll(set2)
+					//// 		--> will remove any element from set1 if it is in set2
+					//// 		( SET1 = SET1 - SET2 )
+					//// 	UNION: set1.addAll(set2)
+					//// 		--> will add any element from set2 to set1 if it does not already exist in set1
+					//// 		( SET1 = SET1 ∪ SET2 )
+				
 				excludeList.removeAll(addedVars);
 				// mb.localVariables.removeAll(excludeList);	//// TODO: Double-check this...
 				for (String badVar : excludeList) {
 					mb.removeVariable(badVar);
 				}
 			}
-
+*/
 
 			//// Run a post-processing pass on the MIPSBlocks in this function's MIPS CFG
 			for (MIPSBlock block : mipsFunction.cfg.blocks) {
 				block.postProcess();
+
+				//// FOR DEBUG
+				block.printAllLiveRanges();
+				//// FOR DEBUG
 			}
+
+			mipsFunction.cfg.computeLiveSets();
+			regAllocator.virtualRegReplacementPass(mipsFunction.cfg);
 
 		}	//// end of "if (!naiveAllocation)"
 
@@ -845,79 +886,77 @@ public class Selector {
 					String arrName = irInst.operands[0].toString();  //((IRArrayType) ((IRVariableOperand) irInst.operands[0]).type).name;
 					MIPSArray arrOperand = processedArrays.get(arrName);
 					String arrStartRegName = arrName + "Base";
-
-					
 					Register arrStartReg = null;
 //// -->
 					if (naiveAllocation) {
 						arrStartReg = regAllocator.getUnusedRegNaive();
 						naivelyAllocatedRegs.add(arrStartReg);
 					} else {
-						// arrStartReg = getMappedReg(arrStartRegName, curBlock);
-						arrStartReg = getMappedReg(arrStartRegName);
-						curBlock.registerLocalVariable(arrStartRegName, arrStartReg.name);
+						arrStartReg = getMappedReg(arrStartRegName, curBlock);
+						// arrStartReg = getMappedReg(arrStartRegName);
+						// curBlock.registerLocalVariable(arrStartRegName, arrStartReg.name);
 					}
 
 
 					//// "la arrayBase, -128($fp)"
-					parsedInst.add(new MIPSInstruction(MIPSOp.LA, null, 
-							arrStartReg,
-							arrOperand.start));
+					MIPSInstruction arrayAssignInst0 = new MIPSInstruction(MIPSOp.LA, null, 
+							arrStartReg, 
+							arrOperand.start);
+					arrayAssignInst0.associatedNames.put(arrStartReg.name, arrStartRegName);
+					parsedInst.add(arrayAssignInst0);
 
 					String sizeValStr = ((IRConstantOperand) irInst.operands[1]).getValueString();
 					Imm arrSizeVal = new Imm(sizeValStr);
 					String arrSizeValName = arrName + "Size";
-
 					Register arrSizeValReg = null;
 //// -->
 					if (naiveAllocation) {
 						arrSizeValReg = regAllocator.getUnusedRegNaive();
 						naivelyAllocatedRegs.add(arrSizeValReg);
 					} else {
-						// arrSizeValReg = getMappedReg(arrSizeValName, curBlock);
-						arrSizeValReg = getMappedReg(arrSizeValName);
-						curBlock.registerLocalVariable(arrSizeValName, arrSizeValReg.name);
+						arrSizeValReg = getMappedReg(arrSizeValName, curBlock);
+						// arrSizeValReg = getMappedReg(arrSizeValName);
+						// curBlock.registerLocalVariable(arrSizeValName, arrSizeValReg.name);
 					}
 
 
 					//// "li arraySize, 32"
-					parsedInst.add(new MIPSInstruction(MIPSOp.LI, null, 
+					MIPSInstruction arrayAssignInst1 = new MIPSInstruction(MIPSOp.LI, null, 
 							arrSizeValReg,
-							arrSizeVal));
+							arrSizeVal);
+					arrayAssignInst1.associatedNames.put(arrSizeValReg.name, arrSizeValName);
+					parsedInst.add(arrayAssignInst1);
 
 					String arrValStr = ((IRConstantOperand) irInst.operands[2]).getValueString();
 					Imm arrVal = new Imm(arrValStr);
 					String arrValName = arrName + "Value";
-
 					Register arrValReg = null;
 //// -->
 					if (naiveAllocation) {
 						arrValReg = regAllocator.getUnusedRegNaive();
 						naivelyAllocatedRegs.add(arrValReg);
 					} else {
-						// arrValReg = getMappedReg(arrValName, curBlock);
-						arrValReg = getMappedReg(arrValName);
-						curBlock.registerLocalVariable(arrValName, arrValReg.name);
+						arrValReg = getMappedReg(arrValName, curBlock);
+						// arrValReg = getMappedReg(arrValName);
+						// curBlock.registerLocalVariable(arrValName, arrValReg.name);
 					}
 
-
 					//// "li arrayValue, 10"
-					parsedInst.add(new MIPSInstruction(MIPSOp.LI, null, 
+					MIPSInstruction arrayAssignInst2 = new MIPSInstruction(MIPSOp.LI, null, 
 							arrValReg,
-							arrVal));
+							arrVal);
+					arrayAssignInst2.associatedNames.put(arrValReg.name, arrValName);
+					parsedInst.add(arrayAssignInst2);
 
 					//// Generate a new label for the array assignment loop
 					label = new String(arrName + "ArrAssignLoop" + parentName);
-					parsedInst.add(new MIPSInstruction(MIPSOp.LABEL, 
-							label,
-							(MIPSOperand) null));
+					MIPSInstruction arrayAssignInst3 = new MIPSInstruction(MIPSOp.LABEL, label, (MIPSOperand) null);
+					parsedInst.add(arrayAssignInst3);
 					if (!curFunction.labelMap.containsKey(label)) {
 						curFunction.labelMap.put(label, new Addr(label));
 					}
 
-
 					String arrIdxStr = arrName + "Idx";
-
 					Register arrIdxReg = null;
 //// -->
 					if (naiveAllocation) {
@@ -929,43 +968,65 @@ public class Selector {
 						curBlock.registerLocalVariable(arrIdxStr, arrIdxReg.name);
 					}
 
-
 					//// "addi arrayIdx, arrayBase, 0"
-					parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
+					MIPSInstruction arrayAssignInst4 = new MIPSInstruction(MIPSOp.ADDI, null, 
 							arrIdxReg,
 							arrStartReg,
-							ZERO));
+							ZERO);
+					arrayAssignInst4.associatedNames.put(arrIdxReg.name, arrIdxStr);
+					arrayAssignInst4.associatedNames.put(arrStartReg.name, arrStartRegName);
+					parsedInst.add(arrayAssignInst4);
 
 					//// "sw arrayValue, 0(arrayIdx)"
-					parsedInst.add(new MIPSInstruction(MIPSOp.SW, null, 
+					MIPSInstruction arrayAssignInst5 = new MIPSInstruction(MIPSOp.SW, null, 
 							arrValReg,
-							new Addr(arrIdxReg)));
+							new Addr(arrIdxReg));
+					arrayAssignInst5.associatedNames.put(arrValReg.name, arrValName);
+					parsedInst.add(arrayAssignInst5);
 
 					//// "addi arrayBase, arrayBase, 4"
-					parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
+					MIPSInstruction arrayAssignInst6 = new MIPSInstruction(MIPSOp.ADDI, null, 
 							arrStartReg,
 							arrStartReg,
-							wordSize));
+							wordSize);
+					arrayAssignInst6.associatedNames.put(arrStartReg.name, arrStartRegName);
+					parsedInst.add(arrayAssignInst6);
 
 					//// "addi arraySize, arraySize, -1"
-					parsedInst.add(new MIPSInstruction(MIPSOp.ADDI, null, 
+					MIPSInstruction arrayAssignInst7 = new MIPSInstruction(MIPSOp.ADDI, null, 
 							arrSizeValReg,
 							arrSizeValReg,
 							// new Imm("-1")));
-							NEG_ONE));
+							NEG_ONE);
+					arrayAssignInst7.associatedNames.put(arrSizeValReg.name, arrSizeValName);
+					parsedInst.add(arrayAssignInst7);
 
 					//// "bgt arraySize, $zero, arrayArrAssignLoop_main"
-					parsedInst.add(new MIPSInstruction(MIPSOp.BGT, null, 
+					MIPSInstruction arrayAssignInst8 = new MIPSInstruction(MIPSOp.BGT, null, 
 							arrSizeValReg,
 							USING_SPIM ? regs.get(/*"$0"*/"$zero") : regs.get("zero"),
-							curFunction.labelMap.get(label)));
+							curFunction.labelMap.get(label));
+					arrayAssignInst8.associatedNames.put(arrSizeValReg.name, arrSizeValName);
+					parsedInst.add(arrayAssignInst8);
+
+				/*
+					for (MIPSInstruction inst : parsedInst) {
+						List<Register> regOperands = new ArrayList<>(Arrays.asList(inst.getReads()));
+						regOperands.add(inst.getWrite());
+						for (Register r : regOperands) {
+							if (r != null) {
+
+							}
+						}
+					}
+				*/
+
 				} else {
 					//// operand[0] will be a register/variable,
 					//// operand[1] will be either a var or constant
 					mipsOperands = new MIPSOperand[irInst.operands.length];
-
-
 					MIPSOperand source = null;
+					String srcName = null;
 
 					if (irInst.operands[1] instanceof IRConstantOperand) {
 						op = MIPSOp.LI;
@@ -987,8 +1048,7 @@ public class Selector {
 
 					} else {
 						op = MIPSOp.MOVE;
-						String srcName = irInst.operands[1].toString();
-
+						srcName = irInst.operands[1].toString();
 //// -->
 						if (naiveAllocation) {
 /*
@@ -1023,9 +1083,9 @@ public class Selector {
 */
 
 						} else {
-							// source = getMappedReg(irInst.operands[1].toString(), curBlock);
-							source = getMappedReg(srcName);
-							curBlock.registerLocalVariable(srcName, ((Register) source).name);
+							source = getMappedReg(srcName, curBlock);
+							// source = getMappedReg(srcName);
+							// curBlock.registerLocalVariable(srcName, ((Register) source).name);
 						}
 
 
@@ -1063,15 +1123,19 @@ public class Selector {
 						destination = getNaiveReg(destName, parsedInst, naivelyAllocatedRegs, false);
 
 					} else {
-						// destination = getMappedReg(irInst.operands[0].toString(), curBlock);
-						destination = getMappedReg(destName);
-						curBlock.registerLocalVariable(destName, destination.name);
+						destination = getMappedReg(destName, curBlock);
+						// destination = getMappedReg(destName);
+						// curBlock.registerLocalVariable(destName, destination.name);
 					}
 					mipsOperands[0] = destination;
 					
-
 					//// Insert the appropriate LI/LA/MOVE instruction for the ASSIGN
-					parsedInst.add(new MIPSInstruction(op, label, mipsOperands));
+					MIPSInstruction assignInst = new MIPSInstruction(op, label, mipsOperands);
+					assignInst.associatedNames.put(destination.name, destName);
+					if (source instanceof Register && srcName != null) {
+						assignInst.associatedNames.put(((Register) source).name, srcName);
+					}
+					parsedInst.add(assignInst);
 
 
 					if (naiveAllocation) {
@@ -1170,15 +1234,16 @@ public class Selector {
 					// destination = getNaiveReg(destName, parsedInst, naivelyAllocatedRegs, false);
 					destination = getNaiveReg(destName, parsedInst, naivelyAllocatedRegs, true);
 				} else {
-					// destination = getMappedReg(irInst.operands[0].toString(), curBlock);
-					destination = getMappedReg(destName);
-					curBlock.registerLocalVariable(destName, destination.name);
+					destination = getMappedReg(destName, curBlock);
+					// destination = getMappedReg(destName);
+					// curBlock.registerLocalVariable(destName, destination.name);
 				}
 
-
-				parsedInst.add(new MIPSInstruction(MIPSOp.MOVE, null, 
+				MIPSInstruction returnInst = new MIPSInstruction(MIPSOp.MOVE, null, 
 						regs.get("$v0"), 
-						destination));
+						destination);
+				returnInst.associatedNames.put(destination.name, destName);
+				parsedInst.add(returnInst);
 
 				/*
 				if (naiveAllocation) {
@@ -1210,9 +1275,9 @@ public class Selector {
 					if (naiveAllocation) {
 						destination = getNaiveReg(destName, parsedInst, naivelyAllocatedRegs, false);
 					} else {
-						// destination = getMappedReg(irInst.operands[0].toString(), curBlock);
-						destination = getMappedReg(destName);
-						curBlock.registerLocalVariable(destName, ((Register) destination).name);
+						destination = getMappedReg(destName, curBlock);
+						// destination = getMappedReg(destName);
+						// curBlock.registerLocalVariable(destName, ((Register) destination).name);
 					}
 
 
@@ -1272,12 +1337,12 @@ public class Selector {
 		if (naiveAllocation) {
 			mipsOperands[0] = getNaiveReg(destination, parsedInst, naivelyAllocatedRegs, false);
 		} else {
-			// mipsOperands[0] = (MIPSOperand) getMappedReg(destination, curBlock);
-			mipsOperands[0] = (MIPSOperand) getMappedReg(destination);
-			curBlock.registerLocalVariable(destination, ((Register) mipsOperands[0]).name);
+			mipsOperands[0] = (MIPSOperand) getMappedReg(destination, curBlock);
+			// mipsOperands[0] = (MIPSOperand) getMappedReg(destination);
+			// curBlock.registerLocalVariable(destination, ((Register) mipsOperands[0]).name);
 		}
 
-
+		String tName = null;
 		for (int i = 1; i < 3; i++) {
 			String operandName = operands[i].toString();
 
@@ -1289,43 +1354,53 @@ public class Selector {
 				} else {
 					//// SUB, MUL, and DIV cannot accept an immediate value as an operand...
 					//// First, load the immediate value into a register, then perform binary op on the reg
-		
 					Register t = null;
 //// -->
 					if (naiveAllocation) {
 						t = regAllocator.getUnusedRegNaive();
 						naivelyAllocatedRegs.add(t);
 					} else {
-						// t = getMappedReg("temp", curBlock);
-						t = getMappedReg("temp");
-						curBlock.registerLocalVariable("temp", t.name);
+						t = getMappedReg("temp", curBlock);
+						// t = getMappedReg("temp");
+						// curBlock.registerLocalVariable("temp", t.name);
 					}
 
-
 					Imm imm = new Imm(operandName);
-					parsedInst.add(new MIPSInstruction(MIPSOp.LI, null,
+					MIPSInstruction loadImmInst = new MIPSInstruction(MIPSOp.LI, null,
 							/*(MIPSOperand)*/ t, 
-							/*(MIPSOperand)*/ imm));
+							/*(MIPSOperand)*/ imm);
+					tName = t.name;
+					loadImmInst.associatedNames.put(tName, "temp");
+					parsedInst.add(loadImmInst);
 					mipsOperands[i] = (MIPSOperand) t;
 				}
 			} 
 			else {
-
 //// -->
 				if (naiveAllocation) {
 					mipsOperands[i] = getNaiveReg(operandName, parsedInst, naivelyAllocatedRegs, true);
 				} else {
-					// mipsOperands[i] = (MIPSOperand) getMappedReg(operands[i].toString(), curBlock);
-					mipsOperands[i] = (MIPSOperand) getMappedReg(operandName);
-					curBlock.registerLocalVariable(operandName, ((Register) mipsOperands[i]).name);
+					mipsOperands[i] = (MIPSOperand) getMappedReg(operandName, curBlock);
+					// mipsOperands[i] = (MIPSOperand) getMappedReg(operandName);
+					// curBlock.registerLocalVariable(operandName, ((Register) mipsOperands[i]).name);
 				}
 
 
 			}
 		}
 
-		// return new MIPSInstruction(op, null, mipsOperands);
-		parsedInst.add(new MIPSInstruction(op, null, mipsOperands));
+		MIPSInstruction binOpInst = new MIPSInstruction(op, null, mipsOperands);
+		for (int j = 0; j < mipsOperands.length; j++) {
+			if (mipsOperands[j] instanceof Register) {
+				String regName = ((Register) mipsOperands[j]).name;
+				if (tName != null && regName.equals(tName)) {
+					binOpInst.associatedNames.put(regName, "temp");
+				} else {
+					binOpInst.associatedNames.put(regName, operands[j].toString());
+				}
+			}
+		}
+		parsedInst.add(binOpInst);
 
 		if (naiveAllocation) {
 			parsedInst.add(spilledRegMap.get(destination).spillRegister((Register) mipsOperands[0]));
@@ -1333,14 +1408,13 @@ public class Selector {
 
 	}
 
-	// private List<MIPSInstruction> parseBranch(MIPSOp opcode1, MIPSOp opcode2, 
 	private void parseBranch(List<MIPSInstruction> parsedInst,
 								MIPSOp op, IROperand[] operands,
 								List<Register> naivelyAllocatedRegs) { 
 		MIPSOperand[] mipsOperands = new MIPSOperand[operands.length];
 		Addr branchTarget = null;
 		String labelName = operands[0].toString();
-		String branchTargetName = new String(labelName + "_" + curFunction.name); //parentFuncName);
+		String branchTargetName = new String(labelName + "_" + curFunction.name);
 
 		if (curFunction.labelMap.containsKey(branchTargetName)) {
 			branchTarget = curFunction.labelMap.get(branchTargetName);
@@ -1352,49 +1426,54 @@ public class Selector {
 		}
 		mipsOperands[2] = branchTarget;
 
+		String tName = null;
 		for (int i = 1; i <= 2; i++) {
 			if (operands[i] instanceof IRConstantOperand) {
 				//// SPIM does not support constant operands for branches! Must first save to a register
-				/*
-				if (((IRConstantOperand) operands[i]).type instanceof IRIntType) {
-					mipsOperands[i-1] = new Imm(operands[i].toString()); //, "DEC");
-				} else {
-					mipsOperands[i-1] = new Imm(operands[i].toString(), "?");
-				}
-				*/
-
 				Register t = null;
 //// -->
 				if (naiveAllocation) {
 					t = regAllocator.getUnusedRegNaive();
 					naivelyAllocatedRegs.add(t);
 				} else {
-					// t = getMappedReg("temp", curBlock);
-					t = getMappedReg("temp");
-					curBlock.registerLocalVariable("temp", t.name);
+					t = getMappedReg("temp", curBlock);
+					// t = getMappedReg("temp");
+					// curBlock.registerLocalVariable("temp", t.name);
 				}
 
-
 				Imm imm = new Imm(((IRConstantOperand) operands[i]).getValueString());
-				parsedInst.add(new MIPSInstruction(MIPSOp.LI, null, t, imm));
+				MIPSInstruction loadImmInst = new MIPSInstruction(MIPSOp.LI, null, t, imm);
+				tName = t.name;
+				loadImmInst.associatedNames.put(tName, "temp");
+				parsedInst.add(loadImmInst);
 				mipsOperands[i-1] = t;
 
 			} else {
-
 //// -->
 				if (naiveAllocation) {
 					mipsOperands[i-1] = getNaiveReg(operands[i].toString(), parsedInst, naivelyAllocatedRegs, true);
 				} else {
-					// mipsOperands[i-1] = getMappedReg(operands[i].toString(), curBlock);
-					mipsOperands[i-1] = getMappedReg(operands[i].toString());
-					curBlock.registerLocalVariable(operands[i].toString(), ((Register) mipsOperands[i-1]).name);
+					mipsOperands[i-1] = getMappedReg(operands[i].toString(), curBlock);
+					// mipsOperands[i-1] = getMappedReg(operands[i].toString());
+					// curBlock.registerLocalVariable(operands[i].toString(), ((Register) mipsOperands[i-1]).name);
 				}
 
 
 			}
 		}
 
-		parsedInst.add(new MIPSInstruction(op, null, mipsOperands));
+		MIPSInstruction branchInst = new MIPSInstruction(op, null, mipsOperands);
+		for (int j = 1; j <= 2; j++) {
+			if (mipsOperands[j-1] instanceof Register) {
+				String regName = ((Register) mipsOperands[j-1]).name;
+				if (tName != null && regName.equals(tName)) {
+					branchInst.associatedNames.put(regName, "temp");
+				} else {
+					branchInst.associatedNames.put(regName, operands[j].toString());
+				}
+			}
+		}
+		parsedInst.add(branchInst);
 	}
 
 	/*
@@ -1458,14 +1537,19 @@ public class Selector {
 						mipsOperands[1] = intToPrintReg;
 
 					} else {
-						// mipsOperands[1] = getMappedReg(intToPrint, curBlock);
-						mipsOperands[1] = getMappedReg(intToPrint);
-						curBlock.registerLocalVariable(intToPrint, ((Register) mipsOperands[1]).name);
+						mipsOperands[1] = getMappedReg(intToPrint, curBlock);
+						// mipsOperands[1] = getMappedReg(intToPrint);
+						// curBlock.registerLocalVariable(intToPrint, ((Register) mipsOperands[1]).name);
 					}
 
 					opcode = MIPSOp.MOVE;
 				}
-				parsedFunc.add(new MIPSInstruction(opcode, null, mipsOperands));
+
+				MIPSInstruction putiInst = new MIPSInstruction(opcode, null, mipsOperands);
+				if (mipsOperands[1] instanceof Register) {
+					putiInst.associatedNames.put(((Register) mipsOperands[1]).name, intToPrint);
+				}
+				parsedFunc.add(putiInst);
 
 				//// syscall
 				parsedFunc.add(new MIPSInstruction(MIPSOp.SYSCALL, null, (MIPSOperand) null));
@@ -1488,8 +1572,6 @@ public class Selector {
 					mipsOperands[1] = new Imm(charToPrint);
 					opcode = MIPSOp.LI;
 				} else { //if (operands[1] instanceof IRVariableOperand) {
-
-
 //// -->
 					if (naiveAllocation) {
 						Register charToPrintReg = getNaiveReg(charToPrint, parsedFunc, naivelyAllocatedRegs, true);
@@ -1497,15 +1579,19 @@ public class Selector {
 						mipsOperands[1] = charToPrintReg;
 
 					} else {
-						// mipsOperands[1] = getMappedReg(charToPrint, curBlock);
-						mipsOperands[1] = getMappedReg(charToPrint);
-						curBlock.registerLocalVariable(charToPrint, ((Register) mipsOperands[1]).name);
+						mipsOperands[1] = getMappedReg(charToPrint, curBlock);
+						// mipsOperands[1] = getMappedReg(charToPrint);
+						// curBlock.registerLocalVariable(charToPrint, ((Register) mipsOperands[1]).name);
 					}
-
 
 					opcode = MIPSOp.MOVE;
 				}
-				parsedFunc.add(new MIPSInstruction(opcode, null, mipsOperands));
+
+				MIPSInstruction putcInst = new MIPSInstruction(opcode, null, mipsOperands);
+				if (mipsOperands[1] instanceof Register) {
+					putcInst.associatedNames.put(((Register) mipsOperands[1]).name, charToPrint);
+				}
+				parsedFunc.add(putcInst);
 
 				//// syscall
 				parsedFunc.add(new MIPSInstruction(MIPSOp.SYSCALL, null, (MIPSOperand) null));
@@ -1528,28 +1614,27 @@ public class Selector {
 				//// syscall (will store int read from keyboard into $v0)
 				parsedFunc.add(new MIPSInstruction(MIPSOp.SYSCALL, null, (MIPSOperand) null));
 
-				// //// sw $v0, intValue
-				// MIPSOperand intValue = 
-
 				//// move destination, $v0  
-				// MIPSOperand destination;
 				String destName = operands[0].toString();
-
 				if (operands[0] instanceof IRVariableOperand) {
 //// -->
 					if (naiveAllocation) {
 						destination = getNaiveReg(destName, parsedFunc, naivelyAllocatedRegs, false);
 					} else {
-						// destination = getMappedReg(operands[0].toString(), curBlock);
-						destination = getMappedReg(destName);
-						curBlock.registerLocalVariable(destName, ((Register) destination).name);
+						destination = getMappedReg(destName, curBlock);
+						// destination = getMappedReg(destName);
+						// curBlock.registerLocalVariable(destName, ((Register) destination).name);
 					}
 
 				} else {	//// Should never be the case
 					destination = new Addr(destName);
 				}
 
-				parsedFunc.add(new MIPSInstruction(MIPSOp.MOVE, null, destination, regs.get("$v0")));
+				MIPSInstruction getiInst = new MIPSInstruction(MIPSOp.MOVE, null, destination, regs.get("$v0"));
+				if (destination instanceof Register) {
+					getiInst.associatedNames.put(((Register) destination).name, destName);
+				}
+				parsedFunc.add(getiInst);
 
 				//// Spill result to the stack
 				if (naiveAllocation) {
@@ -1570,19 +1655,22 @@ public class Selector {
 				mipsOperands[0] = regs.get("$a0");
 
 				destName = ((IRVariableOperand) operands[0]).getName();
-
 //// -->
 				if (naiveAllocation) {
 					destination = getNaiveReg(destName, parsedFunc, naivelyAllocatedRegs, false);
 				} else {
-					// destination = getMappedReg(((IRVariableOperand) operands[0]).getName(), curBlock);
-					destination = getMappedReg(destName);
-					curBlock.registerLocalVariable(destName, ((Register) destination).name);
+					destination = getMappedReg(destName, curBlock);
+					// destination = getMappedReg(destName);
+					// curBlock.registerLocalVariable(destName, ((Register) destination).name);
 				}
 
-
 				mipsOperands[1] = new Addr((Register) destination);
-				parsedFunc.add(new MIPSInstruction(MIPSOp.LA, null, mipsOperands));
+
+				MIPSInstruction getcInst = new MIPSInstruction(MIPSOp.LA, null, mipsOperands);
+
+		//// TODO: determine if really necessary to associate destination when it's only being used as an address offset...
+				getcInst.associatedNames.put(((Register) destination).name, destName);
+				parsedFunc.add(getcInst);
 
 				//// li $a1, lengthOfOne
 				parsedFunc.add(new MIPSInstruction(MIPSOp.LI, null, regs.get("$a1"), new Imm("1")));
@@ -1611,7 +1699,6 @@ public class Selector {
 	private void parseUserFunction(String subroutineName, List<MIPSInstruction> parsedInst, 
 												IROperand[] operands, Register destination,
 												List<Register> naivelyAllocatedRegs) {
-
 		//// Preserve contents of $t0..$t9 on the stack
 		saveTempRegs(parsedInst);
 
@@ -1674,11 +1761,10 @@ public class Selector {
 				if (naiveAllocation) {
 					arg = getNaiveReg(param.toString(), parsedInst, naivelyAllocatedRegs, true);
 				} else {
-					// arg = getMappedReg(param.toString(), curBlock);
-					arg = getMappedReg(param.toString());
-					curBlock.registerLocalVariable(param.toString(), ((Register) arg).name);
+					arg = getMappedReg(param.toString(), curBlock);
+					// arg = getMappedReg(param.toString());
+					// curBlock.registerLocalVariable(param.toString(), ((Register) arg).name);
 				}
-
 
 				// if (arg == null || ((Register) arg).name.contains(curFunction.name)) {
 				// 	arg = getArgumentReg(param.toString());
@@ -1694,13 +1780,19 @@ public class Selector {
 						arg = regAllocator.getUnusedRegNaive();
 						naivelyAllocatedRegs.add((Register) arg);
 					} else {
-						// arg = getMappedReg(argRegName, curBlock);
-						arg = getMappedReg(argRegName);
-						curBlock.registerLocalVariable(argRegName, ((Register) arg).name);
+						arg = getMappedReg(argRegName, curBlock);
+						// arg = getMappedReg(argRegName);
+						// curBlock.registerLocalVariable(argRegName, ((Register) arg).name);
 					}
 
-
-					parsedInst.add(new MIPSInstruction(MIPSOp.LI, null, arg, argVal));
+					MIPSInstruction loadImmInst = new MIPSInstruction(MIPSOp.LI, null, arg, argVal);
+					if (arg instanceof Register) {
+						String argName = ((Register) arg).name;
+						if (argName.startsWith("$t")) {
+							loadImmInst.associatedNames.put(argName, argRegName);
+						}
+					}
+					parsedInst.add(loadImmInst);
 				}
 			} else {
 				// arg = new Addr(param.toString());	// prolly invalid
@@ -1710,8 +1802,14 @@ public class Selector {
 				}
 			}
 
-			parsedInst.add(new MIPSInstruction(MIPSOp.SW, null,
-					arg, stackPointer));
+			MIPSInstruction storeInst = new MIPSInstruction(MIPSOp.SW, null, arg, stackPointer);
+			if (arg instanceof Register) {
+				String argName = ((Register) arg).name;
+				if (argName.startsWith("$t")) {
+					storeInst.associatedNames.put(argName, param.toString());
+				}
+			}
+			parsedInst.add(storeInst);
 		}
 
 		//// Jump and link to the function ("jal functionName")
@@ -1792,9 +1890,12 @@ public class Selector {
 			parsedInst.add(new MIPSInstruction(MIPSOp.COMMENT, 
 					"Load return value in $v0 into the destination register", 
 					(MIPSOperand) null));
-			parsedInst.add(new MIPSInstruction(MIPSOp.MOVE, null, 
+			MIPSInstruction storeReturnValInst = new MIPSInstruction(MIPSOp.MOVE, null, 
 					destination,
-					regs.get("$v0")));
+					regs.get("$v0"));
+			String destName = operands[0].toString();
+			storeReturnValInst.associatedNames.put(destination.name, destName);
+			parsedInst.add(storeReturnValInst);
 		}
 	}
 
@@ -1808,24 +1909,24 @@ public class Selector {
 		String arrName = operands[1].toString();  //((IRArrayType) ((IRVariableOperand) irInst.operands[0]).type).name;
 		MIPSArray arrOperand = processedArrays.get(arrName);
 		String arrStartRegName = arrName + "Base";
-
-
 		Register arrStartReg = null;
 //// -->
 		if (naiveAllocation) {
 			arrStartReg = regAllocator.getUnusedRegNaive();
 			naivelyAllocatedRegs.add(arrStartReg);
 		} else {
-			// arrStartReg = getMappedReg(arrStartRegName, curBlock);
-			arrStartReg = getMappedReg(arrStartRegName);
-			curBlock.registerLocalVariable(arrStartRegName, arrStartReg.name);
+			arrStartReg = getMappedReg(arrStartRegName, curBlock);
+			// arrStartReg = getMappedReg(arrStartRegName);
+			// curBlock.registerLocalVariable(arrStartRegName, arrStartReg.name);
 		}
 
-
 		//// "la arrayBase, -128($fp)"  <--  arrayBase will now point to array[0]
-		parsedInst.add(new MIPSInstruction(MIPSOp.LA, null, 
+		MIPSInstruction arrayOpInst0 = new MIPSInstruction(MIPSOp.LA, null, 
 				arrStartReg,
-				arrOperand.start));
+				arrOperand.start);
+		arrayOpInst0.associatedNames.put(arrStartReg.name, arrStartRegName);
+		parsedInst.add(arrayOpInst0);
+
 
 		String offsetIntoArrRegName = null;
 		Register offsetIntoArrReg = null;
@@ -1835,65 +1936,69 @@ public class Selector {
 			MIPSOperand offsetIntoArr = new Imm(String.valueOf(((IRConstantOperand) 
 					operands[2]).getValueString()));
 			offsetIntoArrRegName = arrName + suffix;
-
 //// -->
 			if (naiveAllocation) {
 				offsetIntoArrReg = regAllocator.getUnusedRegNaive();
 				naivelyAllocatedRegs.add(offsetIntoArrReg);
 			} else {
-				// offsetIntoArrReg = getMappedReg(offsetIntoArrRegName, curBlock);
-				offsetIntoArrReg = getMappedReg(offsetIntoArrRegName);
-				curBlock.registerLocalVariable(offsetIntoArrRegName, offsetIntoArrReg.name);
+				offsetIntoArrReg = getMappedReg(offsetIntoArrRegName, curBlock);
+				// offsetIntoArrReg = getMappedReg(offsetIntoArrRegName);
+				// curBlock.registerLocalVariable(offsetIntoArrRegName, offsetIntoArrReg.name);
 			}
 
-
-			parsedInst.add(new MIPSInstruction(MIPSOp.LI, null,
+			MIPSInstruction arrayOpInst1 = new MIPSInstruction(MIPSOp.LI, null,
 				offsetIntoArrReg,
-				offsetIntoArr));
+				offsetIntoArr);
+			arrayOpInst1.associatedNames.put(offsetIntoArrReg.name, offsetIntoArrRegName);
+			parsedInst.add(arrayOpInst1);
 
 		} else {
 			offsetIntoArrRegName = operands[2].toString(); // + suffix;
-
 //// -->
 			if (naiveAllocation) {
 				offsetIntoArrReg = getNaiveReg(offsetIntoArrRegName, parsedInst, naivelyAllocatedRegs, true);
 			} else {
-				// offsetIntoArrReg = getMappedReg(offsetIntoArrRegName, curBlock);
-				offsetIntoArrReg = getMappedReg(offsetIntoArrRegName);
-				curBlock.registerLocalVariable(offsetIntoArrRegName, offsetIntoArrReg.name);
+				offsetIntoArrReg = getMappedReg(offsetIntoArrRegName, curBlock);
+				// offsetIntoArrReg = getMappedReg(offsetIntoArrRegName);
+				// curBlock.registerLocalVariable(offsetIntoArrRegName, offsetIntoArrReg.name);
 			}
 
 		}	
 
 		String shiftedOffsetName = offsetIntoArrRegName + "Shifted";
-
-
 		Register shiftedOffsetReg = null;	//// Will be a destination register
 //// -->
 		if (naiveAllocation) {
 			shiftedOffsetReg = regAllocator.getUnusedRegNaive();
 			naivelyAllocatedRegs.add(shiftedOffsetReg);
 		} else {
-			// shiftedOffsetReg = getMappedReg(shiftedOffsetName, curBlock);
-			shiftedOffsetReg = getMappedReg(shiftedOffsetName);
-			curBlock.registerLocalVariable(shiftedOffsetName, shiftedOffsetReg.name);
+			shiftedOffsetReg = getMappedReg(shiftedOffsetName, curBlock);
+			// shiftedOffsetReg = getMappedReg(shiftedOffsetName);
+			// curBlock.registerLocalVariable(shiftedOffsetName, shiftedOffsetReg.name);
 		}
 
 		
 		//// Left shift offset value by 2 to reach a word boundary (same as 4 * offset)
-		parsedInst.add(new MIPSInstruction(MIPSOp.SLL, null,
+		MIPSInstruction arrayOpInst2 = new MIPSInstruction(MIPSOp.SLL, null,
 				// offsetIntoArrReg,	//// <-- Causes issues when future instructions try to reuse value
 				shiftedOffsetReg,
 				offsetIntoArrReg,
-				TWO));
+				TWO);
+		arrayOpInst2.associatedNames.put(shiftedOffsetReg.name, shiftedOffsetName);
+		arrayOpInst2.associatedNames.put(offsetIntoArrReg.name, offsetIntoArrRegName);
+		parsedInst.add(arrayOpInst2);
 
 		//// Add word offset relative to the array's base address
-		parsedInst.add(new MIPSInstruction(MIPSOp.ADD, null,
+		MIPSInstruction arrayOpInst3 = new MIPSInstruction(MIPSOp.ADD, null,
 				arrStartReg,
 				arrStartReg,
-				shiftedOffsetReg));		// offsetIntoArrReg));
+				shiftedOffsetReg);
+		arrayOpInst3.associatedNames.put(arrStartReg.name, arrStartRegName);
+		arrayOpInst3.associatedNames.put(shiftedOffsetReg.name, shiftedOffsetName);
+		parsedInst.add(arrayOpInst3);		
 
 		//// Finally...
+		MIPSInstruction arrayOpInst4;
 		if (isLoad) {
 			//// Load the memory contents of (arrayBase + wordOffset) into destination register
 			String destName = operands[0].toString();
@@ -1902,15 +2007,16 @@ public class Selector {
 			if (naiveAllocation) {
 				destination = getNaiveReg(destName, parsedInst, naivelyAllocatedRegs, false);
 			} else {
-				// destination = getMappedReg(operands[0].toString(), curBlock);
-				destination = getMappedReg(destName);
-				curBlock.registerLocalVariable(destName, destination.name);
+				destination = getMappedReg(destName, curBlock);
+				// destination = getMappedReg(destName);
+				// curBlock.registerLocalVariable(destName, destination.name);
 			}
 
-
-			parsedInst.add(new MIPSInstruction(MIPSOp.LW, null,
+			arrayOpInst4 = new MIPSInstruction(MIPSOp.LW, null,
 					destination,
-					new Addr(arrStartReg)));
+					new Addr(arrStartReg));
+			arrayOpInst4.associatedNames.put(destination.name, destName);
+			parsedInst.add(arrayOpInst4);
 
 			if (naiveAllocation) {
 				//// Spill contents of destination register to its allocated address on the stack
@@ -1920,45 +2026,47 @@ public class Selector {
 		} else {
 			//// Store the desired value into (arrayBase + wordOffset)
 			Register valToStoreReg = null;
+			String valToStoreRegName = null;
 			if (operands[0] instanceof IRConstantOperand) {
 				//// If value is constant, need to store its value into a register (using load immediate instruction)
 				Imm valToStore = new Imm(String.valueOf(((IRConstantOperand) 
 						operands[0]).getValueString()));
-				String valToStoreRegName = arrName + "ValueToStore";
-
+				valToStoreRegName = arrName + "ValueToStore";
 
 //// -->
 				if (naiveAllocation) {
 					valToStoreReg = regAllocator.getUnusedRegNaive();
 					naivelyAllocatedRegs.add(valToStoreReg);
 				} else {
-					// valToStoreReg = getMappedReg(valToStoreRegName, curBlock);
-					valToStoreReg = getMappedReg(valToStoreRegName);
-					curBlock.registerLocalVariable(valToStoreRegName, valToStoreReg.name);
+					valToStoreReg = getMappedReg(valToStoreRegName, curBlock);
+					// valToStoreReg = getMappedReg(valToStoreRegName);
+					// curBlock.registerLocalVariable(valToStoreRegName, valToStoreReg.name);
 				}
 
-
-				parsedInst.add(new MIPSInstruction(MIPSOp.LI, null,
+				arrayOpInst4 = new MIPSInstruction(MIPSOp.LI, null,
 						valToStoreReg,
-						valToStore));
+						valToStore);
+				arrayOpInst4.associatedNames.put(valToStoreReg.name, valToStoreRegName);
+				parsedInst.add(arrayOpInst4);
+
 			} else {
 
-				String valToStoreRegName = operands[0].toString();
+				valToStoreRegName = operands[0].toString();
 //// -->
 				if (naiveAllocation) {
 					valToStoreReg = getNaiveReg(valToStoreRegName, parsedInst, naivelyAllocatedRegs, true);
 				} else {
-					// valToStoreReg = getMappedReg(operands[0].toString(), curBlock);
-					valToStoreReg = getMappedReg(valToStoreRegName);
-					curBlock.registerLocalVariable(valToStoreRegName, valToStoreReg.name);
+					valToStoreReg = getMappedReg(valToStoreRegName, curBlock);
+					// valToStoreReg = getMappedReg(valToStoreRegName);
+					// curBlock.registerLocalVariable(valToStoreRegName, valToStoreReg.name);
 				}
-
-
 			}
 
-			parsedInst.add(new MIPSInstruction(MIPSOp.SW, null,
+			MIPSInstruction arrayOpInst5 = new MIPSInstruction(MIPSOp.SW, null,
 					valToStoreReg,
-					new Addr(arrStartReg)));
+					new Addr(arrStartReg));
+			arrayOpInst5.associatedNames.put(valToStoreReg.name, valToStoreRegName);
+			parsedInst.add(arrayOpInst5);
 		}
 	}
 
@@ -2072,50 +2180,6 @@ public class Selector {
 		}
 	}
 
-
-/*
-	private void initializeRegisters() {
-		regs = new HashMap<>();
-
-		for (String name : regAllocator.tempRegNames) {
-			////  $t0..$t9
-			createRealReg(name);
-		}
-
-		for (String name : argRegNames) {
-			////  $a0..$a3
-			createRealReg(name);
-		}
-
-		createRealReg("zero");
-		createRealReg("$0");
-		// createRealReg("$at");
-
-		createRealReg("$v0");
-		createRealReg("$v1");
-
-		createRealReg("$s0");
-		createRealReg("$s1");
-		createRealReg("$s2");
-		createRealReg("$s3");
-		createRealReg("$s4");
-		createRealReg("$s5");
-		createRealReg("$s6");
-		createRealReg("$s7");
-
-		// createRealReg("$k0");
-		// createRealReg("$k1");
-
-		createRealReg("$gp");
-		createRealReg("$sp");
-		createRealReg("$fp");
-		createRealReg("$ra");
-	}
-
-	private void createRealReg(String name) {
-		regs.put(name, new Register(name, false));
-	}
-*/
 
 	private void initializeSystemServices() {
 		systemServiceCodes = new HashMap<>();
