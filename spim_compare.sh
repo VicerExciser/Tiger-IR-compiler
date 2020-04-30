@@ -38,15 +38,29 @@ if [[ ! -f "$EXCPATH_PREFIX$EXCPATH_SUFFIX" ]]; then
 	fi
 fi
 
-./run.sh $TESTPATH -O0 $N_OUTPATH
-#./run_spim.sh $N_OUTPATH > $N_RESPATH
+#./clean.sh && ./build.sh
+BUILD_DIR=build/
+SRC_FILE=sources.txt
+if [[ -d "$BUILD_DIR" ]]; then
+	rm -rf $BUILD_DIR
+fi
+mkdir $BUILD_DIR
+rm -f **/*.class
+rm -f src/**/**.class
+find src -name "*.java" > $SRC_FILE
+javac -d $BUILD_DIR @$SRC_FILE
+rm $SRC_FILE
+
+#./run.sh $TESTPATH -O0 $N_OUTPATH
+java -cp $BUILD_DIR Assembler $TESTPATH -O0 $N_OUTPATH
 spim -keepstats $EXCOPT -f $N_OUTPATH > $N_RESPATH
 
-./run.sh $TESTPATH -O1 $I_OUTPATH
-#./run_spim.sh $I_OUTPATH > $I_RESPATH
+#./run.sh $TESTPATH -O1 $I_OUTPATH
+java -cp $BUILD_DIR Assembler $TESTPATH -O1 $I_OUTPATH
 spim -keepstats $EXCOPT -f $I_OUTPATH > $I_RESPATH
 
 diff $N_RESPATH $I_RESPATH > $DIFFPATH
+echo -e "\n\n\n"
 clear && clear
 
 BANNER="\n=======================================================\n"
@@ -56,10 +70,12 @@ echo -e "$SEP\nTEST NAME:  $TESTNAME\n(All test stats saved to $RES_OUTPATH.*)"
 MSG="Register Allocation Performance Metrics (from spim-keepstats):\n"
 
 echo -e "${BANNER}NAIVE $MSG"
-grep "#" $N_RESPATH
+# grep "#" $N_RESPATH
+cat $N_RESPATH
 
 echo -e "${BANNER}INTRA-BLOCK $MSG"
-grep "#" $I_RESPATH
+# grep "#" $I_RESPATH
+cat $I_RESPATH
 
 echo -e "$BANNER\nDiff:\n"
 cat $DIFFPATH
