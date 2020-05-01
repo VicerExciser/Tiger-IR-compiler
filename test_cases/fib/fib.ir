@@ -5,7 +5,9 @@ float-list:
     assign, t0, 0
     assign, r, 1
     assign, rr, r
-    brgt, if_label0, n, 1
+    call, puti, n
+	call, putc, 32
+	brgt, if_label0, n, 1
     assign, t00, 0
     assign, r, n
     assign, rr, r
@@ -31,6 +33,7 @@ float-list:
     callr, x, geti
     callr, z, fib, x
     assign, x, z
+	call, putc, 10
     call, puti, x
     call, putc, 10
 #end_function

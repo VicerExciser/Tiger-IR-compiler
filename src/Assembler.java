@@ -245,9 +245,6 @@ public class Assembler {
 
 		System.out.println("\n[ Assembler finished - program written to '" + outPathStr + "' ]");
 	
-
-
-
 	}
 
 }

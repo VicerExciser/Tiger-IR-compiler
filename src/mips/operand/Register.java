@@ -1,11 +1,14 @@
 package mips.operand;
 
+import java.util.Stack;
+
 public class Register extends MIPSOperand {
 
     public String name;
     public boolean isVirtual;
     public boolean inUse;
-    public boolean prevInUse;   //// TODO: Perhaps make this a stack for the sake of recursive calls
+    // public boolean prevInUse;   //// TODO: Perhaps make this a stack for the sake of recursive calls
+    public Stack<Boolean> prevInUse;
     // List<MIPSInstruction> references;
     public boolean reservedForSpill;
 
@@ -17,7 +20,9 @@ public class Register extends MIPSOperand {
         this.name = name;
         this.isVirtual = isVirtual;
         this.inUse = false;
-        this.prevInUse = false;
+        // this.prevInUse = false;
+        this.prevInUse = new Stack<Boolean>();
+        this.prevInUse.push(false);
         this.reservedForSpill = false;
     }
 

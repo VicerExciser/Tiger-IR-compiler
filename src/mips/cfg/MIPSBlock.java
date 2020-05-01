@@ -511,6 +511,7 @@ public class MIPSBlock implements Comparable<MIPSBlock> {
 		MIPSInstruction[] blockInstructions = getInstructionsArray();
 		boolean pointReached = false;
 		boolean futureUseFound = false;
+		boolean redefFound = false;
 
 		for (int i = getInstructionIdx(point); i < blockInstructions.length; i++) {
 			if (pointReached) {
@@ -518,6 +519,11 @@ public class MIPSBlock implements Comparable<MIPSBlock> {
 					if (varName.equals(used)) {
 						return true;
 					}
+				}
+				String def = blockInstructions[i].getDefinedName();
+				if (def != null && varName.equals(def)) {
+					//// Redefined before any future use, so okay to evict
+					return false;
 				}
 			}
 

@@ -43,8 +43,6 @@ public class Spill {
 		return spilledValueLocationOnStack;
 	}
 
-	// public void incrementStackPointer()
-
 
 	/**		Really just inserts an instruction such as "SW $t0, 0($sp)"
 			to store the given physical register's current contents

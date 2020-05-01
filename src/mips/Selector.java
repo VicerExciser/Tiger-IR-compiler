@@ -46,7 +46,7 @@ public class Selector {
 
 	private boolean USING_SPIM = true; //false;		//// Set false when using mips-interpreter, else true
 	private boolean SUPPORT_FLOATS = false;
-	// private boolean USE_SYMBOLIC = true;
+	private boolean MANUALLY_INIT_TREGS = false;	//true;
 
 	//// TODO: Abstract out register map into a dedicated register allocator class
 	
@@ -368,7 +368,7 @@ public class Selector {
 
 
 		//// UPDATE (4/22/20): mips-interpreter sometimes fails due to uninitialized registers; here's a dumb fix:
-		if ("main".equalsIgnoreCase(mipsFunction.name)) {
+		if (MANUALLY_INIT_TREGS && "main".equalsIgnoreCase(mipsFunction.name)) {
 			for (String regName : regAllocator.tempRegNames) {
 				prologueInstructions.add(new MIPSInstruction(MIPSOp.LI, null, 
 						regs.get(regName), ZERO));
@@ -2117,9 +2117,10 @@ public class Selector {
 			// 	regs.get(temp).prevInUse = true;
 			// 	regs.get(temp).inUse = false;
 			// }
-			regs.get(temp).prevInUse = regs.get(temp).inUse;
+			// regs.get(temp).prevInUse = regs.get(temp).inUse;
+			// regs.get(temp).inUse = false;
+			regs.get(temp).prevInUse.push(regs.get(temp).inUse);
 			regs.get(temp).inUse = false;
-			
 
 		}
 
@@ -2157,16 +2158,10 @@ public class Selector {
 			}
 
 			//// Update temp reg availability (restore registers to their previous status)
-			// if (regs.get(temp).prevInUse) {
-			// 	regs.get(temp).prevInUse = false;
-			// 	regs.get(temp).inUse = true;
-			// } 
-			// //// TODO: Check this logic... necessary? correct?
-			// else {
-			// 	regs.get(temp).inUse = false;
-			// }
-			regs.get(temp).inUse = regs.get(temp).prevInUse;
-			regs.get(temp).prevInUse = false;
+			// regs.get(temp).inUse = regs.get(temp).prevInUse;
+			// regs.get(temp).prevInUse = false;
+			regs.get(temp).inUse = regs.get(temp).prevInUse.pop();
+			// regs.get(temp).prevInUse = false;
 			
 		}
 

@@ -50,6 +50,7 @@ public class RegAllocator {		//// Singleton
 									"$t5", "$t6", "$t7", "$t8", "$t9"};
 	public String[] argRegNames = {"$a0", "$a1", "$a2", "$a3"};
 	public String[] regsReservedForSpills = {"$t7", "$t8", "$t9"};
+	public Map<String, String> replacedRegs;
 
 
 	private RegAllocator(int allocationMode) {
@@ -71,11 +72,14 @@ public class RegAllocator {		//// Singleton
 
         initializeRegisters();
 
-        if (mode != Mode.NAIVE && RESERVE_SPILL_REGS) {
-        	for (String reservedRegName : regsReservedForSpills) {
-        		registers.get(reservedRegName).reservedForSpill = true;
-        	}
-        }
+        if (mode != Mode.NAIVE) {
+        	if (RESERVE_SPILL_REGS) {
+	        	for (String reservedRegName : regsReservedForSpills) {
+	        		registers.get(reservedRegName).reservedForSpill = true;
+	        	}
+	        }
+	        this.replacedRegs = new HashMap<>();
+        } else this.replacedRegs = null;
         
         this.virtualRegs = new HashMap<>();
         this.spilledRegMap = new HashMap<>();
@@ -410,7 +414,12 @@ public class RegAllocator {		//// Singleton
 			}
 		}
 
-		curBlock.computeInterference();
+		if (replacedRegs != null && replacedRegs.containsKey(oldReg.name)) {
+			victim = registers.get(replacedRegs.get(oldReg.name));
+			return victim;
+		}
+
+		// curBlock.computeInterference();
 /*
 		for (String[] interferingVarPair : curBlock.interferingVars) {
 			// ...
@@ -434,13 +443,13 @@ public class RegAllocator {		//// Singleton
 				}
 				String srcVarName = blockInstructions[i].associatedNames.get(srcReg.name);
 				if (srcVarName == null) {
-					System.out.println("\n /// [findVictimRegFor] Instruction is missing an associatedNames mapping for read reg '"+srcReg.name+"':\n"+blockInstructions[i].toString()+"\n ///\n");
+					System.out.println(" /// [findVictimRegFor] Instruction is missing an associatedNames mapping for read reg '"+srcReg.name+"':\n"+blockInstructions[i].toString()+"\n ///\n");
 					continue;
 				}
 				if (!curBlock.isVariableUsedPastPoint(srcVarName, blockInstructions[i])) {
 					victim = srcReg;
 					victimVarName = srcVarName;
-					System.out.println("\n+++ [findVictimRegFor] VICTIM REG FOUND (source):  "+victimVarName+"  +++\n");
+					System.out.println("+++ [findVictimRegFor] VICTIM REG FOUND (source):  "+victimVarName+"  +++\n");
 					break;
 				}
 			}
@@ -448,10 +457,12 @@ public class RegAllocator {		//// Singleton
 				Register destReg = blockInstructions[i].getWrite();
 				if (destReg != null && destReg.name.startsWith("$t")) {
 					String destVarName = blockInstructions[i].associatedNames.get(destReg.name);
-					if (!curBlock.isVariableUsedPastPoint(destVarName, blockInstructions[i])) {
+					if (destVarName == null) {
+						System.out.println(" /// [findVictimRegFor] Instruction is missing an associatedNames mapping for write reg '"+destReg.name+"':\n"+blockInstructions[i].toString()+"\n ///\n");
+					} else if (!curBlock.isVariableUsedPastPoint(destVarName, blockInstructions[i])) {
 						victim = destReg;
 						victimVarName = destVarName;
-						System.out.println("\n+++ [findVictimRegFor] VICTIM REG FOUND (dest):  "+victimVarName+"  +++\n");
+						System.out.println("+++ [findVictimRegFor] VICTIM REG FOUND (dest):  "+victimVarName+"  +++\n");
 					}
 				}
 			}
@@ -460,10 +471,28 @@ public class RegAllocator {		//// Singleton
 		//// No suitable replacement found in earlier block instructions...
 		//// Perhaps just take one and treat it in a naive manner?
 		if (victim == null) {
-			System.out.println("\n--- [findVictimRegFor] STILL NO VICTIM REG FOUND FOR:  "+oldRegVarName+"  ---\n");
+			System.out.println("\n--- [findVictimRegFor] STILL NO VICTIM REG FOUND FOR: "+oldRegVarName+"  ('"+inst.toString().trim()+"')  ---\n");
 
 			//// FIXME: Temporary implementation!!
-			victim = registers.get("$v1");
+			for (String s : registers.keySet()) {
+				if (s.startsWith("$s") && !s.equals("$sp") && !registers.get(s).inUse) {
+					victim = registers.get(s);
+					lockRegister(s);
+					replacedRegs.put(oldReg.name, victim.name);
+					return victim;
+				}
+			}
+			for (String a : argRegNames) {
+				if (!registers.get(a).inUse) {
+					victim = registers.get(a);
+					lockRegister(a);
+					replacedRegs.put(oldReg.name, victim.name);
+					return victim;
+				}
+			}
+			// if (victim == null) 
+				victim = registers.get("$v1");
+				replacedRegs.put(oldReg.name, victim.name);
 			return victim;
 		}
 
@@ -495,7 +524,7 @@ public class RegAllocator {		//// Singleton
 					// for (Register virtualReg : inst.virtualRegOperands) {
 					for (Register virtualReg : currentVirtualRegs) {
 						if (virtualReg.isVirtual && virtualRegs.containsKey(virtualReg.name) && !removedRegs.contains(virtualReg.name)) {
-							System.out.println("\n{ virtualRegReplacementPass } REPLACING '"+virtualReg.name+"' IN BLOCK '"+block.toString()+"' FOR INSTRUCTION "+inst.toString()+"\n");
+							System.out.println("\n{ virtualRegReplacementPass }\n\tREPLACING '"+virtualReg.name+"' IN BLOCK '"+block.toString()+"' FOR INSTRUCTION '"+inst.toString().trim()+"'\n");
 							//// Reg needs to be swapped
 							String varName = inst.associatedNames.get(virtualReg.name);
 							Register replacement = findVictimRegFor(inst, virtualReg, varName);
@@ -530,7 +559,7 @@ public class RegAllocator {		//// Singleton
 								// if (written != null && written.equals(virtualReg)) {
 								// 	swapRegister(iArr[i], virtualReg, replacement);
 								// }
-								
+
 							}
 
 						}
