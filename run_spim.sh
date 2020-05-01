@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash   
 if [[ $# -lt 1 ]]; then
 	echo "MISSING ARG: Must give filepath to a '.s' file"
 	exit 1
